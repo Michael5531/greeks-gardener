@@ -125,18 +125,31 @@ export default function Flow() {
   const scatterCalls = prints.filter(p => p.type === "call").map(p => ({ x: p.time, y: p.strike, z: p.premium, ...p }));
   const scatterPuts = prints.filter(p => p.type === "put").map(p => ({ x: p.time, y: p.strike, z: p.premium, ...p }));
 
-  // Call (positive) / Put (negative) bidirectional series sorted by time
-  const directional = prints
-    .slice()
-    .sort((a, b) => a.time - b.time)
-    .map((p, i) => ({
-      idx: i,
-      time: p.time,
-      label: new Date(p.time).toISOString().slice(5, 16).replace("T", " "),
-      callPremium: p.type === "call" ? p.premium : 0,
-      putPremium: p.type === "put" ? -p.premium : 0,
-      ...p,
-    }));
+  // Aggregate prints by strike, stacked per expiration. Calls positive, puts negative. Matches Net GEX-by-strike layout.
+  const { strikePremium, expSet } = useMemo(() => {
+    const map = new Map<number, any>();
+    const exps = new Set<string>();
+    for (const p of prints) {
+      const k = p.strike; const e = (p.expiration || "").slice(0, 10);
+      if (k == null) continue;
+      if (e) exps.add(e);
+      const row = map.get(k) ?? { strike: k };
+      const tag = e ? (p.type === "call" ? `${e}__c` : `${e}__p`) : (p.type === "call" ? "_other__c" : "_other__p");
+      const sign = p.type === "call" ? 1 : -1;
+      row[tag] = (row[tag] ?? 0) + sign * (p.premium ?? 0);
+      map.set(k, row);
+    }
+    return {
+      strikePremium: Array.from(map.values()).sort((a, b) => a.strike - b.strike),
+      expSet: Array.from(exps).sort(),
+    };
+  }, [prints]);
+  const expColorMap = useMemo(() => {
+    const out: Record<string, string> = {};
+    const N = Math.max(1, expSet.length);
+    expSet.forEach((e, i) => { out[e] = `hsl(${Math.round((i * 360) / N)} 70% 55%)`; });
+    return out;
+  }, [expSet]);
 
   // premium histogram
   const histogram = (() => {
