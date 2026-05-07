@@ -1,12 +1,64 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// In-memory cache + in-flight dedup for polygon edge function calls.
+// Many components mount the same hooks (HeroTicker, WatchCard, MarketStatusBar)
+// and were each issuing identical requests, hammering the edge function.
+type CacheEntry = { value: any; expiresAt: number };
+const cache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<any>>();
+
+// Per-action cache TTL (ms). 0 = no cache.
+const TTL: Record<string, number> = {
+  "ticker-snapshot": 2500,        // refreshed by useLiveQuote interval anyway
+  "stock-aggregates": 60_000,     // bars rarely change intraday for 5min/day
+  "options-expirations": 5 * 60_000,
+  "options-contracts": 60_000,
+  "options-snapshot-chain": 5_000,
+  "option-snapshot-single": 3_000,
+  "search-tickers": 30_000,
+  "market-status": 30_000,
+};
+
+function keyFor(action: string, body: Record<string, any>) {
+  const sorted = Object.keys(body).sort().reduce<Record<string, any>>((a, k) => { a[k] = body[k]; return a; }, {});
+  return `${action}:${JSON.stringify(sorted)}`;
+}
+
 export async function callPolygon<T = any>(action: string, body: Record<string, any> = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("polygon-proxy", {
-    body: { action, ...body },
-  });
-  if (error) throw error;
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return data as T;
+  const key = keyFor(action, body);
+  const now = Date.now();
+  const ttl = TTL[action] ?? 0;
+
+  if (ttl > 0) {
+    const c = cache.get(key);
+    if (c && c.expiresAt > now) return c.value as T;
+  }
+
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<T>;
+
+  const p = (async () => {
+    const { data, error } = await supabase.functions.invoke("polygon-proxy", {
+      body: { action, ...body },
+    });
+    if (error) throw error;
+    if ((data as any)?.error) throw new Error((data as any).error);
+    if (ttl > 0) cache.set(key, { value: data, expiresAt: Date.now() + ttl });
+    return data;
+  })().finally(() => { inflight.delete(key); });
+
+  inflight.set(key, p);
+  return p as Promise<T>;
+}
+
+/** Force-refresh: clears cache so next call hits network. */
+export function invalidatePolygonCache(actionPrefix?: string) {
+  if (!actionPrefix) { cache.clear(); return; }
+  for (const k of cache.keys()) if (k.startsWith(actionPrefix + ":")) cache.delete(k);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("optix:refresh", () => invalidatePolygonCache());
 }
 
 export async function searchTickers(query: string) {
