@@ -3,7 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import ChartSizer from "@/components/charts/ChartSizer";
 import TickerSearch from "./TickerSearch";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import type { OptType } from "@/lib/blackScholes";
@@ -150,8 +151,9 @@ export default function OptionPricer({ externalTicker, strikeOptions, expiration
       </div>
 
       <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={curve} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+        <ChartSizer>
+          {({ width, height }) => (
+          <LineChart width={width} height={height} data={curve} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
             <CartesianGrid stroke="hsl(var(--grid-line))" />
             <XAxis dataKey="price" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
             <YAxis tickFormatter={v => `$${v}`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
@@ -160,7 +162,8 @@ export default function OptionPricer({ externalTicker, strikeOptions, expiration
             <ReferenceLine x={+spot.toFixed(2)} stroke="hsl(var(--primary))" strokeDasharray="3 3" label={{ value: "now", fill: "hsl(var(--primary))", fontSize: 10 }} />
             <Line type="monotone" dataKey="pnl" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
           </LineChart>
-        </ResponsiveContainer>
+          )}
+        </ChartSizer>
       </div>
     </div>
   );
