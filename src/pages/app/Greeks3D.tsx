@@ -82,33 +82,37 @@ export default function Greeks3D() {
     return out;
   }, [baseData, extraData, selectedExps]);
 
-  const { strikes, exps, grid, total } = useMemo(() => {
+  // Build IV smile data: rows = strike, columns = expiration IV (avg of call & put)
+  const { strikes, exps, ivCurve, total } = useMemo(() => {
     const strikeSet = new Set<number>();
     const expSet = new Set<string>();
+    const acc = new Map<string, { sum: number; n: number }>();
+    let total = 0;
     for (const d of data) {
       const k = d.details?.strike_price; const e = d.details?.expiration_date;
-      if (k != null && e) { strikeSet.add(k); expSet.add(e); }
+      if (k == null || !e) continue;
+      strikeSet.add(k); expSet.add(e); total++;
+      const iv = d.implied_volatility;
+      if (typeof iv === "number" && iv > 0 && iv < 5) {
+        const key = `${k}|${e}`;
+        const r = acc.get(key) ?? { sum: 0, n: 0 };
+        r.sum += iv; r.n += 1; acc.set(key, r);
+      }
     }
     const strikes = Array.from(strikeSet).sort((a, b) => a - b);
     const exps = Array.from(expSet).sort();
-    const sIdx = new Map(strikes.map((s, i) => [s, i] as const));
-    const eIdx = new Map(exps.map((e, i) => [e, i] as const));
-    const grid: Cell[][] = exps.map(() => strikes.map(() => ({ oi: 0, iv: 0, n: 0 })));
-    let total = 0;
-    for (const d of data) {
-      const i = sIdx.get(d.details?.strike_price);
-      const j = eIdx.get(d.details?.expiration_date);
-      if (i == null || j == null) continue;
-      const cell = grid[j][i];
-      cell.oi += d.open_interest ?? 0;
-      if (d.implied_volatility != null) { cell.iv += d.implied_volatility; cell.n += 1; }
-      total += 1;
-    }
-    for (const row of grid) for (const c of row) c.iv = c.n ? c.iv / c.n : 0;
-    return { strikes, exps, grid, total };
+    const ivCurve = strikes.map(s => {
+      const row: any = { strike: s };
+      for (const e of exps) {
+        const r = acc.get(`${s}|${e}`);
+        row[e] = r && r.n ? +(r.sum / r.n * 100).toFixed(2) : null;
+      }
+      return row;
+    });
+    return { strikes, exps, ivCurve, total };
   }, [data]);
 
-  const ready = strikes.length > 1 && exps.length > 1;
+  const ready = strikes.length > 1 && exps.length > 0;
 
   // CALL/PUT 拆分聚合
   const { byStrike, byExp, totals } = useMemo(() => {
