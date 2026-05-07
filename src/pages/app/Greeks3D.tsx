@@ -19,7 +19,12 @@ export default function Greeks3D() {
 
   // Selected expirations for charts (defaults to closest to +7/+14/+21d)
   const [selectedExps, setSelectedExps] = useState<string[]>([]);
-  const [extraData, setExtraData] = useState<Record<string, any[]>>({});
+  // Cache scoped per-ticker so switching symbols never leaks stale contracts
+  const [extraDataAll, setExtraDataAll] = useState<Record<string, Record<string, any[]>>>({});
+  const extraData = (ticker && extraDataAll[ticker]) || {};
+
+  // Reset selected expirations when ticker changes (different chains, different dates)
+  useEffect(() => { setSelectedExps([]); }, [ticker]);
 
   const pickClosestExp = (days: number, list: string[]): string | undefined => {
     if (!list.length) return undefined;
@@ -44,30 +49,36 @@ export default function Greeks3D() {
     setSelectedExps(Array.from(new Set(defaults)));
   }, [expirations]);
 
-  // Fetch chain for any selected expiration that we don't have yet
+  // Fetch chain for any selected expiration that we don't have yet (per-ticker cache)
   useEffect(() => {
     if (!ticker) return;
-    const have = new Set(baseData.map(d => d.details?.expiration_date).filter(Boolean));
+    const baseForThisTicker = baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`));
+    const have = new Set(baseForThisTicker.map(d => d.details?.expiration_date).filter(Boolean));
     const missing = selectedExps.filter(e => !have.has(e) && !extraData[e]);
     if (!missing.length) return;
     let cancelled = false;
+    const tk = ticker;
     Promise.all(missing.map(async e => {
-      try { const r = await getOptionsChain(ticker, e); return [e, r as any[]] as const; }
+      try { const r = await getOptionsChain(tk, e); return [e, r as any[]] as const; }
       catch { return [e, [] as any[]] as const; }
     })).then(results => {
       if (cancelled) return;
-      setExtraData(prev => {
-        const next = { ...prev };
-        for (const [e, r] of results) next[e] = r;
-        return next;
+      setExtraDataAll(prev => {
+        const bucket = { ...(prev[tk] ?? {}) };
+        for (const [e, r] of results) bucket[e] = r;
+        return { ...prev, [tk]: bucket };
       });
     });
     return () => { cancelled = true; };
-  }, [ticker, selectedExps, baseData, extraData]);
+  }, [ticker, selectedExps, baseData]);
 
   // Merge: base data + extra fetched data, then filter to selectedExps for charts
   const data = useMemo(() => {
-    if (!selectedExps.length) return baseData;
+    // Defensive: only keep rows whose option ticker matches the selected underlying
+    const baseFiltered = ticker
+      ? baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`))
+      : baseData;
+    if (!selectedExps.length) return baseFiltered;
     const seen = new Set<string>();
     const out: any[] = [];
     const push = (d: any) => {
@@ -75,12 +86,12 @@ export default function Greeks3D() {
       if (seen.has(k)) return;
       seen.add(k); out.push(d);
     };
-    for (const d of baseData) {
+    for (const d of baseFiltered) {
       if (selectedExps.includes(d.details?.expiration_date)) push(d);
     }
     for (const e of selectedExps) for (const d of (extraData[e] ?? [])) push(d);
     return out;
-  }, [baseData, extraData, selectedExps]);
+  }, [baseData, extraData, selectedExps, ticker]);
 
   // Build IV smile data: rows = strike, columns = expiration IV (avg of call & put)
   const { strikes, exps, ivCurve, total } = useMemo(() => {
