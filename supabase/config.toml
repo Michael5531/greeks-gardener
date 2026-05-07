@@ -1,1 +1,7 @@
 project_id = "hkohoumgswnyllcuragv"
+
+[functions.polygon-proxy]
+verify_jwt = false
+
+[functions.run-backtest]
+verify_jwt = false
