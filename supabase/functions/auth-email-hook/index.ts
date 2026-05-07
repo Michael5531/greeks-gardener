@@ -36,7 +36,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "opti-x"
+const SITE_NAME = "OPTI-X"
 const SENDER_DOMAIN = "order.opti-x.io"
 const ROOT_DOMAIN = "opti-x.io"
 const FROM_DOMAIN = "opti-x.io" // Domain shown in From address (may be root or sender subdomain)
