@@ -1,8 +1,8 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
-import { Bar, BarChart, CartesianGrid, Legend, Line as RLine, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Line as RLine, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt } from "@/lib/optionUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -142,8 +142,8 @@ export default function Greeks3D() {
         {loading && <div className="absolute top-3 left-3 text-xs text-muted-foreground font-mono">加载期权链…</div>}
         {error && <div className="absolute top-3 left-3 text-xs text-destructive font-mono">{error}</div>}
         {ticker && ready && (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={ivCurve} margin={{ top: 12, right: 16, left: 0, bottom: 24 }}>
+          <ChartSizer>
+            {({ width, height }) => <LineChart width={width} height={height} data={ivCurve} margin={{ top: 12, right: 16, left: 0, bottom: 24 }}>
               <CartesianGrid stroke="hsl(var(--grid-line))" />
               <XAxis dataKey="strike" type="number" domain={["dataMin", "dataMax"]}
                 tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
@@ -163,8 +163,8 @@ export default function Greeks3D() {
                 <RLine key={e} type="monotone" dataKey={e} name={e} stroke={expColors[e] ?? "hsl(var(--primary))"}
                   strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
               ))}
-            </LineChart>
-          </ResponsiveContainer>
+            </LineChart>}
+          </ChartSizer>
         )}
         {ticker && !ready && !loading && (
           <div className="absolute inset-0 grid place-items-center text-muted-foreground text-sm">数据不足以绘制曲线</div>
