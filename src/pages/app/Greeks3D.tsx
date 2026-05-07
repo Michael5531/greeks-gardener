@@ -5,6 +5,8 @@ import { OrbitControls, Line, Text } from "@react-three/drei";
 import * as THREE from "three";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { fmt } from "@/lib/optionUtils";
 
 function Axes({ size = 5 }: { size?: number }) {
   const L = size;
@@ -130,6 +132,37 @@ export default function Greeks3D() {
 
   const ready = strikes.length > 1 && exps.length > 1;
 
+  // CALL/PUT 拆分聚合
+  const { byStrike, byExp, totals } = useMemo(() => {
+    const sMap = new Map<number, { strike: number; callOI: number; putOI: number; callVol: number; putVol: number }>();
+    const eMap = new Map<string, { exp: string; callOI: number; putOI: number; callVol: number; putVol: number }>();
+    let cOI = 0, pOI = 0, cV = 0, pV = 0;
+    for (const d of data) {
+      const k = d.details?.strike_price;
+      const e = d.details?.expiration_date;
+      const isCall = d.details?.contract_type === "call";
+      const oi = d.open_interest ?? 0;
+      const vol = d.day?.volume ?? 0;
+      if (k != null) {
+        const r = sMap.get(k) ?? { strike: k, callOI: 0, putOI: 0, callVol: 0, putVol: 0 };
+        if (isCall) { r.callOI += oi; r.callVol += vol; } else { r.putOI += oi; r.putVol += vol; }
+        sMap.set(k, r);
+      }
+      if (e) {
+        const r = eMap.get(e) ?? { exp: e, callOI: 0, putOI: 0, callVol: 0, putVol: 0 };
+        if (isCall) { r.callOI += oi; r.callVol += vol; } else { r.putOI += oi; r.putVol += vol; }
+        eMap.set(e, r);
+      }
+      if (isCall) { cOI += oi; cV += vol; } else { pOI += oi; pV += vol; }
+    }
+    const byStrike = Array.from(sMap.values()).sort((a, b) => a.strike - b.strike);
+    const byExp = Array.from(eMap.values()).sort((a, b) => a.exp.localeCompare(b.exp));
+    return { byStrike, byExp, totals: { callOI: cOI, putOI: pOI, callVol: cV, putVol: pV } };
+  }, [data]);
+
+  const pcrOI = totals.callOI ? totals.putOI / totals.callOI : 0;
+  const pcrVol = totals.callVol ? totals.putVol / totals.callVol : 0;
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -160,6 +193,83 @@ export default function Greeks3D() {
           {strikes.length} strikes · {exps.length} expiries · {total} contracts
         </div>
       </div>
+
+      {ticker && data.length > 0 && (
+        <>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Stat label="Call OI" value={fmtK(totals.callOI)} tone="bull" />
+            <Stat label="Put OI" value={fmtK(totals.putOI)} tone="bear" />
+            <Stat label="Call Volume" value={fmtK(totals.callVol)} tone="bull" />
+            <Stat label="Put Volume" value={fmtK(totals.putVol)} tone="bear" />
+            <Stat label="Put/Call OI Ratio" value={pcrOI.toFixed(2)} tone={pcrOI > 1 ? "bear" : "bull"} />
+            <Stat label="Put/Call Vol Ratio" value={pcrVol.toFixed(2)} tone={pcrVol > 1 ? "bear" : "bull"} />
+            <Stat label="Strikes" value={String(byStrike.length)} />
+            <Stat label="Expiries" value={String(byExp.length)} />
+          </div>
+
+          <Section title="未平仓量 OI · 按行权价" subtitle="Call vs Put 堆叠">
+            <StackedChart data={byStrike} xKey="strike" aKey="callOI" bKey="putOI" />
+          </Section>
+
+          <Section title="未平仓量 OI · 按到期日" subtitle="Call vs Put 堆叠">
+            <StackedChart data={byExp} xKey="exp" aKey="callOI" bKey="putOI" />
+          </Section>
+
+          <Section title="成交量 Volume · 按行权价" subtitle="Call vs Put 堆叠">
+            <StackedChart data={byStrike} xKey="strike" aKey="callVol" bKey="putVol" />
+          </Section>
+
+          <Section title="成交量 Volume · 按到期日" subtitle="Call vs Put 堆叠">
+            <StackedChart data={byExp} xKey="exp" aKey="callVol" bKey="putVol" />
+          </Section>
+        </>
+      )}
     </div>
+  );
+}
+
+function fmtK(n: number) {
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return String(n);
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "bull" | "bear" }) {
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-3">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className={`text-xl font-mono mt-0.5 ${tone === "bull" ? "text-bull" : tone === "bear" ? "text-bear" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {subtitle && <span className="text-[11px] text-muted-foreground">{subtitle}</span>}
+      </div>
+      <div className="h-72">{children}</div>
+    </div>
+  );
+}
+
+function StackedChart({ data, xKey, aKey, bKey }: { data: any[]; xKey: string; aKey: string; bKey: string }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+        <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
+        <XAxis dataKey={xKey} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+        <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
+        <Tooltip
+          contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}
+          formatter={(v: number, name: string) => [fmtK(v), name.startsWith("call") ? "Call" : "Put"]}
+        />
+        <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v) => v.startsWith("call") ? "Call" : "Put"} />
+        <Bar dataKey={aKey} stackId="s" fill="hsl(var(--bull))" />
+        <Bar dataKey={bKey} stackId="s" fill="hsl(var(--bear))" />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
