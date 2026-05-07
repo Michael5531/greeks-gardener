@@ -1,8 +1,8 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
-import { Bar, BarChart, CartesianGrid, Legend, Line as RLine, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Line as RLine, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt } from "@/lib/optionUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -142,8 +142,8 @@ export default function Greeks3D() {
         {loading && <div className="absolute top-3 left-3 text-xs text-muted-foreground font-mono">加载期权链…</div>}
         {error && <div className="absolute top-3 left-3 text-xs text-destructive font-mono">{error}</div>}
         {ticker && ready && (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={ivCurve} margin={{ top: 12, right: 16, left: 0, bottom: 24 }}>
+          <ChartSizer>
+            {({ width, height }) => <LineChart width={width} height={height} data={ivCurve} margin={{ top: 12, right: 16, left: 0, bottom: 24 }}>
               <CartesianGrid stroke="hsl(var(--grid-line))" />
               <XAxis dataKey="strike" type="number" domain={["dataMin", "dataMax"]}
                 tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
@@ -163,8 +163,8 @@ export default function Greeks3D() {
                 <RLine key={e} type="monotone" dataKey={e} name={e} stroke={expColors[e] ?? "hsl(var(--primary))"}
                   strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
               ))}
-            </LineChart>
-          </ResponsiveContainer>
+            </LineChart>}
+          </ChartSizer>
         )}
         {ticker && !ready && !loading && (
           <div className="absolute inset-0 grid place-items-center text-muted-foreground text-sm">数据不足以绘制曲线</div>
@@ -235,10 +235,30 @@ function Section({ title, subtitle, children, tall }: { title: string; subtitle?
   );
 }
 
+function ChartSizer({ children }: { children: (size: { width: number; height: number }) => React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 320, height: 320 });
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      setSize({ width: Math.max(1, Math.floor(rect.width)), height: Math.max(1, Math.floor(rect.height)) });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return <div ref={ref} className="h-full w-full min-h-0 min-w-0">{children(size)}</div>;
+}
+
 function StackedChart({ data, xKey, aKey, bKey }: { data: any[]; xKey: string; aKey: string; bKey: string }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+    <ChartSizer>
+      {({ width, height }) => <BarChart width={width} height={height} data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis dataKey={xKey} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
@@ -249,8 +269,8 @@ function StackedChart({ data, xKey, aKey, bKey }: { data: any[]; xKey: string; a
         <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v) => v.startsWith("call") ? "Call" : "Put"} />
         <Bar dataKey={aKey} stackId="s" fill="hsl(var(--bull))" />
         <Bar dataKey={bKey} stackId="s" fill="hsl(var(--bear))" />
-      </BarChart>
-    </ResponsiveContainer>
+      </BarChart>}
+    </ChartSizer>
   );
 }
 
@@ -258,8 +278,8 @@ function DTEStackedChart({
   data, xKey, exps, colors, refX,
 }: { data: any[]; xKey: string; exps: string[]; colors: Record<string, string>; refX: number | null }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
+    <ChartSizer>
+      {({ width, height }) => <BarChart width={width} height={height} data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis dataKey={xKey} type="category" interval="preserveStartEnd" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(Math.abs(v))} />
@@ -291,15 +311,15 @@ function DTEStackedChart({
             label={{ value: `Spot ${refX.toFixed(2)}`, position: "top", fill: "hsl(var(--foreground))", fontSize: 11, fontFamily: "JetBrains Mono" }}
           />
         )}
-      </BarChart>
-    </ResponsiveContainer>
+      </BarChart>}
+    </ChartSizer>
   );
 }
 
 function ExpiryLineChart({ data }: { data: any[] }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+    <ChartSizer>
+      {({ width, height }) => <LineChart width={width} height={height} data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis dataKey="exp" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis yAxisId="oi" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
@@ -313,8 +333,8 @@ function ExpiryLineChart({ data }: { data: any[] }) {
         <RLine yAxisId="oi" type="monotone" dataKey="putOI" name="Put OI" stroke="hsl(var(--bear))" strokeWidth={2} dot={{ r: 3 }} />
         <RLine yAxisId="vol" type="monotone" dataKey="callVol" name="Call Vol" stroke="hsl(var(--bull))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
         <RLine yAxisId="vol" type="monotone" dataKey="putVol" name="Put Vol" stroke="hsl(var(--bear))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
+      </LineChart>}
+    </ChartSizer>
   );
 }
 
