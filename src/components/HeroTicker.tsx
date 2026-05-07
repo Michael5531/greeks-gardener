@@ -1,0 +1,111 @@
+import { useMemo } from "react";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
+import { useLiveQuote, computeSessionET } from "@/hooks/useLiveQuote";
+import { useStockBars } from "@/hooks/useStockBars";
+import { useT } from "@/i18n";
+import { cn } from "@/lib/utils";
+import { TrendingDown, TrendingUp } from "lucide-react";
+
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function prevWeekdayISO() {
+  const d = new Date();
+  do { d.setDate(d.getDate() - 1); } while (d.getDay() === 0 || d.getDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+function yearStartISO() { return `${new Date().getFullYear()}-01-01`; }
+
+export default function HeroTicker({ ticker }: { ticker: string }) {
+  const t = useT();
+  const session = computeSessionET();
+  const isOpen = session === "regular" || session === "after";
+  const refreshMs = session === "regular" ? 3000 : session === "closed" ? 30000 : 8000;
+  const { quote } = useLiveQuote(ticker, refreshMs);
+
+  const intradayDate = isOpen ? todayISO() : prevWeekdayISO();
+  const { bars: intraday } = useStockBars(ticker || null, intradayDate, intradayDate, "minute", 5);
+  const { bars: ytd } = useStockBars(ticker || null, yearStartISO(), todayISO(), "day", 1);
+
+  const intraSeries = useMemo(() => intraday.map(b => ({ t: b.t, c: b.c })), [intraday]);
+  const ytdSeries = useMemo(() => ytd.map(b => ({ t: b.t, c: b.c })), [ytd]);
+
+  const intraStart = intraday[0]?.o ?? intraday[0]?.c ?? null;
+  const intraLast = intraday[intraday.length - 1]?.c ?? null;
+  const intraChg = intraStart && intraLast ? (intraLast - intraStart) / intraStart : null;
+  const intraUp = (intraChg ?? 0) >= 0;
+
+  const ytdStart = ytd[0]?.o ?? ytd[0]?.c ?? null;
+  const ytdLast = ytd[ytd.length - 1]?.c ?? null;
+  const ytdChg = ytdStart && ytdLast ? (ytdLast - ytdStart) / ytdStart : null;
+  const ytdUp = (ytdChg ?? 0) >= 0;
+
+  const liveUp = (quote?.change ?? 0) >= 0;
+
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4 grid md:grid-cols-[auto_1fr_auto] gap-4 items-center">
+      <div>
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{ticker}</div>
+        <div className="flex items-baseline gap-2 mt-0.5">
+          <div className="text-3xl font-mono font-semibold">
+            {quote?.price != null ? `$${quote.price.toFixed(2)}` : "—"}
+          </div>
+          {quote?.change != null && (
+            <div className={cn("text-xs font-mono flex items-center gap-1", liveUp ? "text-bull" : "text-bear")}>
+              {liveUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {quote.change >= 0 ? "+" : ""}{quote.change.toFixed(2)} ({((quote.changePct ?? 0) * 100).toFixed(2)}%)
+            </div>
+          )}
+        </div>
+        <div className="mt-1 text-[10px] text-muted-foreground font-mono">
+          {isOpen ? t.market.since : `${t.market.prevDay} · ${intradayDate}`}
+        </div>
+      </div>
+
+      <div className="h-16 min-w-0">
+        {intraSeries.length > 1 && (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={intraSeries} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="intraGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={`hsl(var(--${intraUp ? "bull" : "bear"}))`} stopOpacity={0.45} />
+                  <stop offset="100%" stopColor={`hsl(var(--${intraUp ? "bull" : "bear"}))`} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <YAxis hide domain={["dataMin", "dataMax"]} />
+              <Tooltip
+                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                formatter={(v: any) => `$${(+v).toFixed(2)}`}
+                labelFormatter={(_l, p) => p?.[0]?.payload?.t ? new Date(p[0].payload.t).toLocaleTimeString() : ""}
+              />
+              <Area dataKey="c" stroke={`hsl(var(--${intraUp ? "bull" : "bear"}))`} fill="url(#intraGrad)" strokeWidth={1.5} dot={false} type="monotone" isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t.market.ytd}</div>
+          <div className={cn("text-base font-mono", ytdUp ? "text-bull" : "text-bear")}>
+            {ytdChg != null ? `${ytdChg >= 0 ? "+" : ""}${(ytdChg * 100).toFixed(2)}%` : "—"}
+          </div>
+        </div>
+        <div className="h-12 w-28">
+          {ytdSeries.length > 1 && (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={ytdSeries} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="ytdGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={`hsl(var(--${ytdUp ? "bull" : "bear"}))`} stopOpacity={0.45} />
+                    <stop offset="100%" stopColor={`hsl(var(--${ytdUp ? "bull" : "bear"}))`} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <YAxis hide domain={["dataMin", "dataMax"]} />
+                <Area dataKey="c" stroke={`hsl(var(--${ytdUp ? "bull" : "bear"}))`} fill="url(#ytdGrad)" strokeWidth={1.2} dot={false} type="monotone" isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
