@@ -1,14 +1,17 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Activity, BarChart3, Boxes, LayoutDashboard, LineChart, LogOut, Radar, TrendingUp } from "lucide-react";
+import { Activity, BarChart3, Boxes, History, Layers, LayoutDashboard, LineChart, LogOut, Radar, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import MarketStatusBar from "./MarketStatusBar";
 
 const nav = [
   { to: "/app", label: "概览", icon: LayoutDashboard, end: true },
   { to: "/app/chain", label: "期权链", icon: Boxes },
   { to: "/app/greeks", label: "3D Greeks", icon: Activity },
   { to: "/app/gex", label: "GEX 分析", icon: BarChart3 },
+  { to: "/app/orderbook", label: "实时盘口", icon: Layers },
+  { to: "/app/flow", label: "历史期权流", icon: History },
   { to: "/app/backtest", label: "回测", icon: LineChart },
   { to: "/app/signals", label: "信号", icon: Radar },
 ];
@@ -56,6 +59,7 @@ export default function AppLayout() {
         </div>
       </aside>
       <main className="flex-1 min-w-0 overflow-x-hidden">
+        <MarketStatusBar />
         <Outlet />
       </main>
     </div>

@@ -39,3 +39,29 @@ export async function getStockBars(ticker: string, from: string, to: string) {
   const data = await callPolygon<{ results?: any[] }>("stock-aggregates", { ticker, from, to });
   return data.results ?? [];
 }
+
+export async function getMarketStatus() {
+  return callPolygon<any>("market-status", {});
+}
+
+export async function getOptionQuotes(option_ticker: string, gte?: number, limit = 5000) {
+  const data = await callPolygon<{ results?: any[] }>("option-quotes", { option_ticker, gte, limit });
+  return data.results ?? [];
+}
+
+export async function getOptionTrades(option_ticker: string, gte?: number, limit = 5000) {
+  const data = await callPolygon<{ results?: any[] }>("option-trades", { option_ticker, gte, limit });
+  return data.results ?? [];
+}
+
+export async function getOptionSnapshotSingle(underlying: string, option_ticker: string) {
+  const data = await callPolygon<any>("option-snapshot-single", { underlying, option_ticker });
+  return data?.results ?? null;
+}
+
+export async function runHistoricalFlow(payload: Record<string, any>) {
+  const { data, error } = await (await import("@/integrations/supabase/client")).supabase.functions.invoke("historical-flow", { body: payload });
+  if (error) throw error;
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as any;
+}
