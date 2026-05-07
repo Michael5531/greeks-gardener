@@ -11,7 +11,6 @@ import { fmt, fmtPct } from "@/lib/optionUtils";
 import { STRATEGIES, getStrategy } from "@/lib/strategies";
 import StrategyCard from "@/components/StrategyCard";
 import { getOptionsChain, getSnapshot } from "@/lib/polygon";
-import { useEffect as useEffect2 } from "react";
 
 export default function Backtest() {
   const [ticker, setTicker] = useState("AAPL");
@@ -66,7 +65,7 @@ export default function Backtest() {
       toast.error(e.message ?? "拉取实时数据失败");
     } finally { setPulling(false); }
   }
-  useEffect2(() => { pullLive(ticker); /* eslint-disable-next-line */ }, [ticker]);
+  useEffect(() => { pullLive(ticker); /* eslint-disable-next-line */ }, [ticker]);
 
   async function run() {
     if (!def.engineSupported) {
