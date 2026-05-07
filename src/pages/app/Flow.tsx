@@ -327,7 +327,8 @@ export default function Flow() {
                     <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} />
                     <Bar dataKey="count" fill="hsl(var(--accent))" />
                   </BarChart>
-                </ResponsiveContainer>
+                  )}
+                </ChartSizer>
               </div>
             </div>
           </div>
