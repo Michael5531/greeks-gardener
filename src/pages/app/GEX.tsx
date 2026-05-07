@@ -13,6 +13,16 @@ import { Sparkles, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import DTEStackedChart, { buildExpColors } from "@/components/charts/DTEStackedChart";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+function AIMarkdown({ text }: { text: string }) {
+  return (
+    <div className="prose prose-invert prose-sm max-w-none max-h-[600px] overflow-auto">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
 
 export default function GEX() {
   const [ticker, setTicker] = useSelectedTicker();
@@ -329,7 +339,7 @@ export default function GEX() {
           </Button>
         </div>
         {aiText ? (
-          <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed text-foreground/90 max-h-[600px] overflow-auto">{aiText}</pre>
+          <AIMarkdown text={aiText} />
         ) : (
           <div className="text-xs text-muted-foreground py-8 text-center">
             {strikePivot.length ? "点击右上角运行 AI 分析" : "请先选择标的并加载数据"}
