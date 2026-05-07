@@ -11,12 +11,22 @@ import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
 import OptionPricer from "@/components/OptionPricer";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { useOptionsChain } from "@/hooks/useOptionsChain";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
 
 export default function Flow() {
   const [ticker, setTicker] = useSelectedTicker();
+  const { data: chainData, expirations } = useOptionsChain(ticker || null);
+  const strikeOptions = useMemo(() => {
+    const s = new Set<number>();
+    for (const d of chainData) {
+      const k = d.details?.strike_price;
+      if (typeof k === "number") s.add(k);
+    }
+    return Array.from(s).sort((a, b) => a - b);
+  }, [chainData]);
 
   const [fromDate, setFromDate] = useState(ago(5));
   const [toDate, setToDate] = useState(today());
@@ -359,7 +369,11 @@ export default function Flow() {
         </>
       )}
 
-      <OptionPricer />
+      <OptionPricer
+        externalTicker={ticker}
+        strikeOptions={strikeOptions}
+        expirationOptions={expirations}
+      />
     </div>
   );
 }
