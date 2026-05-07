@@ -1,8 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Line, Text } from "@react-three/drei";
-import * as THREE from "three";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { getOptionsChain } from "@/lib/polygon";
@@ -14,97 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { X, Plus } from "lucide-react";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
-
-function Axes({ size = 5 }: { size?: number }) {
-  const L = size;
-  return (
-    <group>
-      <Line points={[[0,0,0],[L,0,0]]} color="#ff5577" lineWidth={1.5} />
-      <Line points={[[0,0,0],[0,L,0]]} color="#55ff99" lineWidth={1.5} />
-      <Line points={[[0,0,0],[0,0,L]]} color="#5599ff" lineWidth={1.5} />
-      <Text position={[L+0.3,0,0]} fontSize={0.3} color="#ff7799">Strike</Text>
-      <Text position={[0,L+0.3,0]} fontSize={0.3} color="#77ffaa">OI</Text>
-      <Text position={[0,0,L+0.3]} fontSize={0.3} color="#77aaff">Expiry</Text>
-      <gridHelper args={[L*2, 10, "#333", "#1f1f1f"]} position={[L/2,0,L/2]} />
-    </group>
-  );
-}
-
-type Cell = { oi: number; iv: number; n: number };
-
-function Surface({ strikes, exps, grid }: { strikes: number[]; exps: string[]; grid: Cell[][] }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const W = 10, D = 10, H = 5;
-  const nx = strikes.length, nz = exps.length;
-
-  const { geometry, material } = useMemo(() => {
-    const geom = new THREE.PlaneGeometry(W, D, Math.max(1, nx - 1), Math.max(1, nz - 1));
-    geom.rotateX(-Math.PI / 2);
-    geom.translate(W / 2, 0, D / 2);
-
-    let oiMax = 0;
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) oiMax = Math.max(oiMax, grid[j][i].oi);
-    oiMax = oiMax || 1;
-
-    const pos = geom.attributes.position as THREE.BufferAttribute;
-    const colors = new Float32Array(pos.count * 3);
-    const c = new THREE.Color();
-    for (let j = 0; j < nz; j++) {
-      for (let i = 0; i < nx; i++) {
-        const idx = j * nx + i;
-        const cell = grid[j][i];
-        const h = (cell.oi / oiMax) * H;
-        pos.setY(idx, h);
-        const iv = cell.iv;
-        const t = Math.min(1, Math.max(0, iv / 1.0));
-        c.setHSL(((1 - t) * 220) / 360, 0.85, 0.5 + (cell.oi / oiMax) * 0.15);
-        colors[idx * 3] = c.r; colors[idx * 3 + 1] = c.g; colors[idx * 3 + 2] = c.b;
-      }
-    }
-    pos.needsUpdate = true;
-    geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geom.computeVertexNormals();
-
-    const mat = new THREE.MeshStandardMaterial({
-      vertexColors: true, side: THREE.DoubleSide,
-      metalness: 0.2, roughness: 0.55, flatShading: false,
-    });
-    return { geometry: geom, material: mat };
-  }, [strikes, exps, grid, nx, nz]);
-
-  useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
-
-  // axis tick labels (sample)
-  const xTicks = useMemo(() => {
-    const out: { x: number; label: string }[] = [];
-    const step = Math.max(1, Math.floor(nx / 6));
-    for (let i = 0; i < nx; i += step) out.push({ x: (i / Math.max(1, nx - 1)) * W, label: String(strikes[i]) });
-    return out;
-  }, [strikes, nx]);
-  const zTicks = useMemo(() => {
-    const out: { z: number; label: string }[] = [];
-    const step = Math.max(1, Math.floor(nz / 5));
-    for (let j = 0; j < nz; j += step) out.push({ z: (j / Math.max(1, nz - 1)) * D, label: exps[j]?.slice(5) ?? "" });
-    return out;
-  }, [exps, nz]);
-
-  return (
-    <group position={[-W / 2, 0, -D / 2]}>
-      <mesh ref={meshRef} geometry={geometry} material={material} />
-      {/* wireframe overlay */}
-      <mesh geometry={geometry}>
-        <meshBasicMaterial wireframe color="#ffffff" transparent opacity={0.08} />
-      </mesh>
-      <Axes size={Math.max(W, D) * 0.6} />
-      {xTicks.map((t, i) => (
-        <Text key={`xt-${i}`} position={[t.x, -0.05, -0.3]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.22} color="#ff9aae">{t.label}</Text>
-      ))}
-      {zTicks.map((t, i) => (
-        <Text key={`zt-${i}`} position={[-0.3, -0.05, t.z]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.22} color="#9ab5ff">{t.label}</Text>
-      ))}
-    </group>
-  );
-}
 
 export default function Greeks3D() {
   const [ticker, setTicker] = useSelectedTicker();
