@@ -216,9 +216,17 @@ export default function GEX() {
         {!ticker && <div className="grid place-items-center h-full text-muted-foreground">请先搜索标的</div>}
         {ticker && rows.length > 0 && (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} margin={{ top: 12, right: 12, left: 0, bottom: 24 }}>
+            <BarChart data={rows} margin={{ top: 12, right: 12, left: 0, bottom: 40 }}>
               <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
-              <XAxis dataKey="strike" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+              <XAxis
+                dataKey="strike"
+                type="category"
+                interval="preserveStartEnd"
+                minTickGap={8}
+                height={36}
+                tickMargin={8}
+                tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
+              />
               <YAxis yAxisId="gex" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
                 tickFormatter={(v: number) => `${(v/1e6).toFixed(1)}M`} />
               <YAxis yAxisId="oi" orientation="right" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
