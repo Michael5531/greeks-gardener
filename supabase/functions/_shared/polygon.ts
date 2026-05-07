@@ -1,6 +1,6 @@
 // Shared Polygon REST client used by all compute-* edge functions.
-// Uses POLYGON_API_KEY and the api.massive.com proxy (matches polygon-proxy).
-const BASE = "https://api.massive.com";
+// Uses POLYGON_API_KEY against the official Polygon API host.
+const BASE = "https://api.polygon.io";
 const KEY = Deno.env.get("POLYGON_API_KEY") ?? "";
 
 export function hasKey() {
