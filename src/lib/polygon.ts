@@ -9,14 +9,17 @@ const inflight = new Map<string, Promise<any>>();
 
 // Per-action cache TTL (ms). 0 = no cache.
 const TTL: Record<string, number> = {
-  "ticker-snapshot": 2500,        // refreshed by useLiveQuote interval anyway
-  "stock-aggregates": 60_000,     // bars rarely change intraday for 5min/day
-  "options-expirations": 5 * 60_000,
-  "options-contracts": 60_000,
-  "options-snapshot-chain": 5_000,
-  "option-snapshot-single": 3_000,
-  "search-tickers": 30_000,
-  "market-status": 30_000,
+  // Underlying snapshot — many components mount useLiveQuote for the same
+  // ticker; share results aggressively. Refresh tick is 30s anyway.
+  "ticker-snapshot": 15_000,
+  "stock-aggregates": 5 * 60_000,
+  "options-expirations": 10 * 60_000,
+  "options-contracts": 5 * 60_000,
+  "options-snapshot-chain": 20_000,
+  "option-snapshot-single": 10_000,
+  "option-aggregates": 5 * 60_000,
+  "search-tickers": 5 * 60_000,
+  "market-status": 60_000,
 };
 
 function keyFor(action: string, body: Record<string, any>) {
