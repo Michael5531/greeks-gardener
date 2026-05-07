@@ -36,7 +36,7 @@ export default function OptionPricer({ externalTicker, strikeOptions, expiration
   // Auto-pick first strike near spot when strike options provided
   useEffect(() => {
     if (!strikeOptions?.length) return;
-    const target = livePrice ?? +manualSpot || strikeOptions[0];
+    const target = (livePrice ?? +manualSpot) || strikeOptions[0];
     let best = strikeOptions[0], bd = Infinity;
     for (const s of strikeOptions) { const d = Math.abs(s - target); if (d < bd) { bd = d; best = s; } }
     setStrike(String(best));
