@@ -9,8 +9,7 @@ export default function Chain() {
   const [params, setParams] = useSearchParams();
   const ticker = params.get("ticker") ?? "";
   const [exp, setExp] = useState<string | undefined>();
-  const activeExp = exp && expirations.includes(exp) ? exp : undefined;
-  const { data, loading, error, expirations } = useOptionsChain(ticker || null, activeExp);
+  const { data, loading, error, expirations } = useOptionsChain(ticker || null, exp);
 
   useEffect(() => {
     if (expirations.length && (!exp || !expirations.includes(exp))) setExp(expirations[0]);
