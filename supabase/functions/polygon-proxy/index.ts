@@ -49,6 +49,22 @@ Deno.serve(async (req) => {
         params.set("limit", "250");
         break;
       }
+      case "options-expirations": {
+        // Paginate through contracts to get every expiration date
+        const seen = new Set<string>();
+        let next = `${POLYGON_BASE}/v3/reference/options/contracts?underlying_ticker=${encodeURIComponent(body.ticker)}&limit=1000&expired=false&apiKey=${apiKey}`;
+        let pages = 0;
+        while (next && pages < 10) {
+          const rr = await fetch(next);
+          const dd = await rr.json();
+          for (const c of dd.results ?? []) {
+            if (c.expiration_date) seen.add(c.expiration_date);
+          }
+          pages++;
+          next = dd.next_url ? `${dd.next_url}&apiKey=${apiKey}` : "";
+        }
+        return json({ results: Array.from(seen).sort() });
+      }
       case "stock-aggregates": {
         const { ticker, from, to, timespan = "day", multiplier = 1 } = body;
         endpoint = `/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/${multiplier}/${timespan}/${from}/${to}`;
