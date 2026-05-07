@@ -305,6 +305,10 @@ export default function Greeks3D() {
 
       {ticker && data.length > 0 && (
         <>
+          <Section title="IV Surface · DTE × Strike" subtitle="Heatmap · 颜色 = 隐含波动率 (蓝低 红高)">
+            <IVSurfaceHeatmap ivCurve={ivCurve} strikes={strikes} exps={exps} spot={underlyingPrice} />
+          </Section>
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat label="Call OI" value={fmtK(totals.callOI)} tone="bull" />
             <Stat label="Put OI" value={fmtK(totals.putOI)} tone="bear" />
