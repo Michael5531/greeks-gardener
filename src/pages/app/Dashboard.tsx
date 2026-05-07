@@ -1,20 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import TickerSearch from "@/components/TickerSearch";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { X, TrendingUp, TrendingDown } from "lucide-react";
-import { getSnapshot } from "@/lib/polygon";
-import { Link } from "react-router-dom";
 import { useT } from "@/i18n";
 import HeroTicker from "@/components/HeroTicker";
+import WatchCard from "@/components/WatchCard";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 
 type WL = { id: string; ticker: string };
 
 export default function Dashboard() {
   const [items, setItems] = useState<WL[]>([]);
-  const [snaps, setSnaps] = useState<Record<string, any>>({});
   const t = useT();
   const [selectedTicker, setSelectedTicker] = useSelectedTicker();
 
@@ -24,17 +20,6 @@ export default function Dashboard() {
     setItems(data ?? []);
   }
   useEffect(() => { load(); }, []);
-
-  useEffect(() => {
-    items.forEach(async (it) => {
-      if (snaps[it.ticker]) return;
-      try {
-        const s = await getSnapshot(it.ticker);
-        setSnaps(prev => ({ ...prev, [it.ticker]: s }));
-      } catch { /* ignore */ }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
 
   async function add(ticker: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -69,45 +54,15 @@ export default function Dashboard() {
             {t.dashboard.empty}
           </div>
         )}
-        {items.map(it => {
-          const s = snaps[it.ticker];
-          const day = s?.day; const prev = s?.prevDay;
-          const price = day?.c ?? prev?.c;
-          const chg = s?.todaysChange ?? 0;
-          const chgPct = s?.todaysChangePerc ?? 0;
-          const up = chg >= 0;
-          const active = selectedTicker === it.ticker;
-          return (
-            <div
-              key={it.id}
-              onClick={() => setSelectedTicker(it.ticker)}
-              className={`rounded-lg border bg-card/50 p-4 group hover:border-primary/60 transition-colors cursor-pointer ${active ? "border-primary ring-1 ring-primary/40" : "border-border"}`}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-mono font-bold text-lg">{it.ticker}</div>
-                  <div className="text-xs text-muted-foreground">{s?.day?.v ? `Vol ${(s.day.v/1e6).toFixed(1)}M` : "—"}</div>
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); remove(it.id); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <div className="font-mono text-2xl">{price ? `$${price.toFixed(2)}` : "—"}</div>
-                {price && (
-                  <div className={`text-xs font-mono flex items-center gap-1 ${up ? "text-bull" : "text-bear"}`}>
-                    {up ? <TrendingUp className="h-3 w-3"/> : <TrendingDown className="h-3 w-3"/>}
-                    {chg.toFixed(2)} ({chgPct.toFixed(2)}%)
-                  </div>
-                )}
-              </div>
-              <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
-                <Link to={`/app/chain?ticker=${it.ticker}`} onClick={() => setSelectedTicker(it.ticker)}><Button size="sm" variant="secondary">{t.dashboard.openChain}</Button></Link>
-                <Link to={`/app/greeks?ticker=${it.ticker}`} onClick={() => setSelectedTicker(it.ticker)}><Button size="sm" variant="ghost">{t.dashboard.open3D}</Button></Link>
-              </div>
-            </div>
-          );
-        })}
+        {items.map(it => (
+          <WatchCard
+            key={it.id}
+            ticker={it.ticker}
+            active={selectedTicker === it.ticker}
+            onSelect={() => setSelectedTicker(it.ticker)}
+            onRemove={() => remove(it.id)}
+          />
+        ))}
       </div>
     </div>
   );
