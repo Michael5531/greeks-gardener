@@ -1,72 +1,66 @@
-## 计划：Flow 图表升级 + 期权价值计算器 + 回测策略库
+## 改动计划
 
-### 1. 历史期权流：Call/Put 双向条形图
+### 1. 概览自选可点击 + 全局选中标的
 
-在 Flow 页（`src/pages/app/Flow.tsx`）的"时间×Strike 散点图"下方新增一张组合图：
-- X 轴：时间（按合约或按时间分桶）
-- Y 轴：premium 数值
-- **Call 大单：正值（向上柱状）**，使用 `hsl(var(--bull))`
-- **Put 大单：负值（向下柱状）**，使用 `hsl(var(--bear))`
-- 鼠标 hover 显示 strike / size / premium / 合约
-- 用 recharts `ComposedChart` + `ReferenceLine y=0`
+- `Dashboard.tsx`：整张卡片包一层 `Link` 跳转到 `/app/chain?ticker=XXX`，点 `期权链 / 3D Greeks` 等保留为快捷按钮。
+- 新增 `src/hooks/useSelectedTicker.ts`：从 URL `?ticker=` 读取，写入 `localStorage('optix.ticker')`。
+- 改造各分析页（`Chain / Greeks3D / GEX / Orderbook / Flow / Backtest`）默认值：URL 没有 ticker 时回退到 localStorage，从而所有页面"记住"上次选中的标的。
+- `MarketStatusBar` 同样使用此 hook，保证顶栏价格跟随。
 
-### 2. 期权价值计算器（新增 `OptionPricer` 卡片，放在 Flow 页底部）
+### 2. 概览顶部的实时价 + 当日小曲线 + YTD
 
-允许用户独立计算单个合约的潜在 PnL：
-- 输入：标的（TickerSearch，自动拉当前 spot）
-- 选择：DTE（数字输入）、Call/Put、Strike、IV%、利率%
-- 输入：标的价格变动（百分比 slider，-20% ~ +20%）+ IV 变动（slider，-30% ~ +30%）+ 时间流逝天数
-- 实时计算：
-  - 当前理论价（BS）
-  - 新理论价（spot/IV/T 调整后）
-  - 期权价格变动 Δ$
-  - PnL（按 1 contract = 100 股）
-- 输出一条 **PnL 曲线**：X = 标的价格（spot ± 20%），Y = 单合约 PnL，零线参考
+新增 `src/components/HeroTicker.tsx` 放在概览顶部（仅当存在选中标的时显示）：
 
-技术：在前端 `src/lib/blackScholes.ts` 新建一个纯函数 BS pricer（复用 `run-backtest` 里的 `bs/N/erf` 逻辑），无需后端调用。
+- 实时大字号价格、涨跌、涨跌幅，复用 `useLiveQuote`（盘中 3s，盘前/后 8s，休市 30s）。
+- 中间一条 sparkline：
+  - 盘中/盘后 → 调用 `getStockBars(ticker, today, today, '5/minute')`；
+  - 盘前/休市 → 取上一个交易日 5min K 线。
+  - 用 `recharts` `<AreaChart>` 渲染，高度 60px，配色按涨跌取 `--bull/--bear`。
+- 右侧 YTD 模块：拉 `getStockBars(ticker, '2026-01-01', today, 'day')`，显示 `YTD %` 和迷你曲线。
+- 自选卡片同样用此 hook 接 `useLiveQuote` 替换一次性 snapshot，使每个卡片价格随时间跳动。
 
-### 3. 策略库 + Payoff 可视化（Backtest 页升级）
+### 3. 统一日期选择器
 
-在 `src/pages/app/Backtest.tsx` 顶部"策略"下拉中新增完整策略列表：
-- Long Call / Long Put
-- Covered Call / Cash-Secured Put（已有）
-- LEAP Call（DTE ≥ 365 的 long call）
-- Vertical Call/Put Spread（debit & credit）
-- Straddle / Strangle（long & short）
-- Iron Condor / Iron Butterfly
-- Calendar Spread
-- Collar
+- 新增 `src/components/ui/date-picker.tsx`：基于 shadcn `Popover + Calendar`，输出 ISO `YYYY-MM-DD`。
+- 替换所有 `<Input type="date">`：`Flow.tsx` 起止日、`Backtest.tsx`（如有）。
+- `Chain / GEX / Greeks3D` 的到期日下拉沿用现有 `Select`，但增加"按月份分组"和`📅` 图标。
 
-下拉选中后立即在表单下方展示 **Strategy Card**（不依赖回测运行，纯前端计算）：
-- **Max Loss / Max Profit / Breakeven(s)** — 公式硬编码到策略元数据
-- **历史 Win Rate**：从 `backtests` 表查询同 strategy_type 历史结果均值（若无则显示"暂无历史"）
-- **Win Fill / 盈利率分布**：相同来源的简单聚合
-- **Payoff 曲线**：纯前端 `ComposedChart`
-  - X 轴：到期时标的价格（spot ± 30%，101 个点）
-  - Y 轴：到期 PnL（含权利金）
-  - **额外画一条"今日 PnL"曲线**（用 BS 计算未到期价值）
-  - 零线、breakeven 垂直参考线、当前 spot 垂直参考线
+### 4. 中英文语言切换
 
-### 4. 后端扩展（最小改动）
+- 新增 `src/i18n/index.ts`：极简 i18n（无外部依赖），提供 `useT()` 钩子 + `LanguageProvider`，存储到 `localStorage('optix.lang')`，默认 `zh`。
+- 新增 `src/i18n/zh.ts` + `src/i18n/en.ts`，按命名空间组织 key（`nav.*`, `dashboard.*`, `gex.*`, `flow.*`, `pricer.*`, `strategy.*`, `market.*`, `common.*` 等）。
+- 把所有页面/组件的中文硬编码字符串迁移到 key（统一替换，保证两语言完全对齐）。
+- `MarketStatusBar` 右侧加 `LanguageSwitcher`（`中文 / EN` toggle）。
 
-`supabase/functions/run-backtest/index.ts` 新增 strategy_type 分支：
-- 当前只实现 `covered_call` / `cash_secured_put`
-- 本次先只把 **long_call / long_put / leap_call / straddle** 接入引擎（每根 K 线开/平单腿或双腿 BS 估值），其余多腿策略**仅前端 payoff 展示**，回测按钮提示"暂不支持引擎回测"
+### 5. 期权术语帮助按钮
 
-### 文件改动清单
+- 新增 `src/components/HelpPopover.tsx`：`?` 图标 + Radix `Popover`，接收 `term` prop 渲染解释。
+- 新增 `src/i18n/glossary.ts`：内建 ~20 个术语（Delta / Gamma / Theta / Vega / IV / OI / Volume / GEX / DTE / ATM / ITM / OTM / Spread / Straddle / Iron Condor / LEAP / Sweep / Premium…），同样支持中英。
+- 在所有出现这些术语的列头/标签后渲染 `<HelpPopover term="gex" />`。
 
-新建：
-- `src/lib/blackScholes.ts` — 前端 BS pricer + greeks
-- `src/lib/strategies.ts` — 策略元数据（legs / max loss / payoff function）
-- `src/components/OptionPricer.tsx` — 期权计算器卡片
-- `src/components/StrategyCard.tsx` — 策略详情 + Payoff 曲线
+### 6. 全局 AI 询问 + Markdown
 
-编辑：
-- `src/pages/app/Flow.tsx` — 加 Call↑/Put↓ ComposedChart + 嵌入 `<OptionPricer/>`
-- `src/pages/app/Backtest.tsx` — 扩展策略下拉 + 嵌入 `<StrategyCard/>`
-- `supabase/functions/run-backtest/index.ts` — 新增 long_call/long_put/leap_call/straddle 分支
+- 新增 `supabase/functions/ai-chat/index.ts`：使用 Lovable AI Gateway（`google/gemini-2.5-flash` 默认），接收 `{ messages, context? }`，流式或一次性返回。
+- 新增 `src/components/GlobalAIChat.tsx`：右下角悬浮 FAB → 抽屉 (`Sheet`)，含会话历史（`useState` 内存即可，不持久化）。
+- 安装并引入 `react-markdown` + `remark-gfm`，渲染所有 AI 回复（同时把 GEX 页已有的 AI 解读输出也接上 Markdown 渲染）。
+- 输入框支持回车发送，发送时把当前页面 `ticker / route` 作为系统上下文塞入第一条 system message，便于上下文相关回答。
 
-### 待澄清
+### 技术细节
 
-1. 期权计算器的 IV 默认值你想从哪里取？（a）用户手填默认 30%（b）从当前 chain ATM IV 自动拉取
-2. 多腿策略（Iron Condor、Spread 等）是否需要回测引擎支持？还是本期只要 Payoff 可视化即可？
+- 新文件：
+  - `src/hooks/useSelectedTicker.ts`
+  - `src/components/HeroTicker.tsx`
+  - `src/components/ui/date-picker.tsx`
+  - `src/components/HelpPopover.tsx`
+  - `src/components/LanguageSwitcher.tsx`
+  - `src/components/GlobalAIChat.tsx`
+  - `src/i18n/{index.ts, zh.ts, en.ts, glossary.ts}`
+  - `supabase/functions/ai-chat/index.ts`
+- 依赖新增：`react-markdown`, `remark-gfm`。
+- `AppLayout` 挂载 `LanguageProvider` + `<GlobalAIChat />` FAB；`MarketStatusBar` 加 `<LanguageSwitcher />`。
+- AI 函数无需 secret（Lovable AI Gateway 自带 `LOVABLE_API_KEY`）。
+
+### 范围外
+
+- 不改后端业务逻辑（GEX 计算、回测引擎等保持不变）。
+- 不持久化 AI 对话历史（如需后续可加 `ai_conversations` 表）。
