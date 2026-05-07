@@ -8,15 +8,25 @@ import { Label } from "@/components/ui/label";
 import { runHistoricalFlow } from "@/lib/polygon";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Bar, BarChart, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
 import OptionPricer from "@/components/OptionPricer";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { useOptionsChain } from "@/hooks/useOptionsChain";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
 
 export default function Flow() {
   const [ticker, setTicker] = useSelectedTicker();
+  const { data: chainData, expirations } = useOptionsChain(ticker || null);
+  const strikeOptions = useMemo(() => {
+    const s = new Set<number>();
+    for (const d of chainData) {
+      const k = d.details?.strike_price;
+      if (typeof k === "number") s.add(k);
+    }
+    return Array.from(s).sort((a, b) => a - b);
+  }, [chainData]);
 
   const [fromDate, setFromDate] = useState(ago(5));
   const [toDate, setToDate] = useState(today());
@@ -115,18 +125,31 @@ export default function Flow() {
   const scatterCalls = prints.filter(p => p.type === "call").map(p => ({ x: p.time, y: p.strike, z: p.premium, ...p }));
   const scatterPuts = prints.filter(p => p.type === "put").map(p => ({ x: p.time, y: p.strike, z: p.premium, ...p }));
 
-  // Call (positive) / Put (negative) bidirectional series sorted by time
-  const directional = prints
-    .slice()
-    .sort((a, b) => a.time - b.time)
-    .map((p, i) => ({
-      idx: i,
-      time: p.time,
-      label: new Date(p.time).toISOString().slice(5, 16).replace("T", " "),
-      callPremium: p.type === "call" ? p.premium : 0,
-      putPremium: p.type === "put" ? -p.premium : 0,
-      ...p,
-    }));
+  // Aggregate prints by strike, stacked per expiration. Calls positive, puts negative. Matches Net GEX-by-strike layout.
+  const { strikePremium, expSet } = useMemo(() => {
+    const map = new Map<number, any>();
+    const exps = new Set<string>();
+    for (const p of prints) {
+      const k = p.strike; const e = (p.expiration || "").slice(0, 10);
+      if (k == null) continue;
+      if (e) exps.add(e);
+      const row = map.get(k) ?? { strike: k };
+      const tag = e ? (p.type === "call" ? `${e}__c` : `${e}__p`) : (p.type === "call" ? "_other__c" : "_other__p");
+      const sign = p.type === "call" ? 1 : -1;
+      row[tag] = (row[tag] ?? 0) + sign * (p.premium ?? 0);
+      map.set(k, row);
+    }
+    return {
+      strikePremium: Array.from(map.values()).sort((a, b) => a.strike - b.strike),
+      expSet: Array.from(exps).sort(),
+    };
+  }, [prints]);
+  const expColorMap = useMemo(() => {
+    const out: Record<string, string> = {};
+    const N = Math.max(1, expSet.length);
+    expSet.forEach((e, i) => { out[e] = `hsl(${Math.round((i * 360) / N)} 70% 55%)`; });
+    return out;
+  }, [expSet]);
 
   // premium histogram
   const histogram = (() => {
@@ -206,27 +229,34 @@ export default function Flow() {
 
           <div className="rounded-lg border border-border bg-card/40 p-4">
             <div className="text-sm font-semibold mb-2">
-              Call ↑ / Put ↓ 大单 Premium
-              <span className="text-xs text-muted-foreground ml-2">向上为 call，向下为 put · 单位 $</span>
+              Call ↑ / Put ↓ 大单 Premium · 按行权价
+              <span className="text-xs text-muted-foreground ml-2">Call 在上 / Put 在下 · 不同到期日叠加</span>
             </div>
-            <div className="h-[360px]">
+            <div className="h-[420px]">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={directional} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
-                  <CartesianGrid stroke="hsl(var(--grid-line))" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} minTickGap={40} />
-                  <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
-                  <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />
+                <BarChart data={strikePremium} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
+                  <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
+                  <XAxis dataKey="strike" type="category" interval="preserveStartEnd"
+                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tickFormatter={v => `${(Math.abs(v) / 1000).toFixed(0)}K`}
+                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+                  <ReferenceLine y={0} stroke="hsl(var(--border))" />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }}
-                    formatter={(v: any, n: any, item: any) => {
-                      const p = item?.payload;
-                      const abs = Math.abs(v);
-                      return [`$${(abs / 1000).toFixed(0)}K · K=${p?.strike} · sz=${p?.size}`, n === "callPremium" ? "Call" : "Put"];
+                    formatter={(v: any, n: string) => {
+                      const isCall = n.endsWith("__c");
+                      const exp = n.replace(/__[cp]$/, "");
+                      return [`${isCall ? "C" : "P"} $${(Math.abs(v) / 1000).toFixed(0)}K`, exp];
                     }}
                   />
-                  <Bar dataKey="callPremium" fill="hsl(var(--bull))" />
-                  <Bar dataKey="putPremium" fill="hsl(var(--bear))" />
-                </ComposedChart>
+                  <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: string) => v.replace(/__[cp]$/, "")} />
+                  {expSet.map(e => (
+                    <Bar key={`${e}-c`} dataKey={`${e}__c`} stackId="x" fill={expColorMap[e]} name={`${e}__c`} />
+                  ))}
+                  {expSet.map(e => (
+                    <Bar key={`${e}-p`} dataKey={`${e}__p`} stackId="x" fill={expColorMap[e]} fillOpacity={0.55} name={`${e}__p`} legendType="none" />
+                  ))}
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -359,7 +389,11 @@ export default function Flow() {
         </>
       )}
 
-      <OptionPricer />
+      <OptionPricer
+        externalTicker={ticker}
+        strikeOptions={strikeOptions}
+        expirationOptions={expirations}
+      />
     </div>
   );
 }

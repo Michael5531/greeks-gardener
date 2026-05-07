@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -9,8 +9,18 @@ import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { bsPrice, bsGreeks, OptType } from "@/lib/blackScholes";
 import { fmt } from "@/lib/optionUtils";
 
-export default function OptionPricer() {
-  const [ticker, setTicker] = useState<string>("");
+export interface OptionPricerProps {
+  /** Auto-sync external ticker (e.g. from page selector). */
+  externalTicker?: string | null;
+  /** Optional strike list for dropdown selection */
+  strikeOptions?: number[];
+  /** Optional expiration date list (YYYY-MM-DD) for DTE dropdown */
+  expirationOptions?: string[];
+}
+
+export default function OptionPricer({ externalTicker, strikeOptions, expirationOptions }: OptionPricerProps = {}) {
+  const [ticker, setTicker] = useState<string>(externalTicker ?? "");
+  useEffect(() => { if (externalTicker) setTicker(externalTicker); }, [externalTicker]);
   const { quote } = useLiveQuote(ticker || null, 5000);
   const livePrice = quote?.price ?? null;
 
@@ -22,6 +32,28 @@ export default function OptionPricer() {
   const [strike, setStrike] = useState<string>("");
   const [iv, setIv] = useState(30);
   const [r, setR] = useState(4.5);
+
+  // Auto-pick first strike near spot when strike options provided
+  useEffect(() => {
+    if (!strikeOptions?.length) return;
+    const target = (livePrice ?? +manualSpot) || strikeOptions[0];
+    let best = strikeOptions[0], bd = Infinity;
+    for (const s of strikeOptions) { const d = Math.abs(s - target); if (d < bd) { bd = d; best = s; } }
+    setStrike(String(best));
+  }, [strikeOptions, livePrice]);
+
+  // Auto-pick nearest expiration ~30d
+  useEffect(() => {
+    if (!expirationOptions?.length) return;
+    const now = Date.now();
+    let best = expirationOptions[0], bd = Infinity;
+    for (const e of expirationOptions) {
+      const d = Math.abs((new Date(e).getTime() - now) / 86400000 - 30);
+      if (d < bd) { bd = d; best = e; }
+    }
+    const days = Math.max(1, Math.round((new Date(best).getTime() - now) / 86400000));
+    setDte(days);
+  }, [expirationOptions]);
 
   const [pctMove, setPctMove] = useState(0); // -20..+20
   const [ivMove, setIvMove] = useState(0);   // -30..+30
@@ -76,8 +108,36 @@ export default function OptionPricer() {
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Strike"><Input className="h-8 font-mono text-xs" placeholder={String(Math.round(spot))} value={strike} onChange={e => setStrike(e.target.value)} /></Field>
-        <Field label="DTE"><Input type="number" className="h-8 font-mono text-xs" value={dte} onChange={e => setDte(+e.target.value)} /></Field>
+        <Field label="Strike">
+          {strikeOptions?.length ? (
+            <Select value={strike} onValueChange={setStrike}>
+              <SelectTrigger className="h-8 font-mono text-xs"><SelectValue placeholder="选择" /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                {strikeOptions.map(s => <SelectItem key={s} value={String(s)} className="font-mono text-xs">{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input className="h-8 font-mono text-xs" placeholder={String(Math.round(spot))} value={strike} onChange={e => setStrike(e.target.value)} />
+          )}
+        </Field>
+        <Field label="到期 / DTE">
+          {expirationOptions?.length ? (
+            <Select
+              value={String(dte)}
+              onValueChange={(v) => setDte(+v)}
+            >
+              <SelectTrigger className="h-8 font-mono text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                {expirationOptions.map(e => {
+                  const days = Math.max(1, Math.round((new Date(e).getTime() - Date.now()) / 86400000));
+                  return <SelectItem key={e} value={String(days)} className="font-mono text-xs">{e} ({days}d)</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input type="number" className="h-8 font-mono text-xs" value={dte} onChange={e => setDte(+e.target.value)} />
+          )}
+        </Field>
         <Field label="IV %"><Input type="number" step="1" className="h-8 font-mono text-xs" value={iv} onChange={e => setIv(+e.target.value)} /></Field>
         <Field label="Rate %"><Input type="number" step="0.1" className="h-8 font-mono text-xs" value={r} onChange={e => setR(+e.target.value)} /></Field>
         <Stat label="当前理论价" value={`$${fmt(current)}`} />
