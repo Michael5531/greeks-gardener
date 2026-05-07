@@ -278,10 +278,12 @@ export default function Flow() {
                     <XAxis type="number" tickFormatter={v => `$${(v/1e6).toFixed(1)}M`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
                     <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} width={140} />
                     <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any, _n, p: any) => [`$${(v/1e6).toFixed(2)}M`, isCallTicker(p?.payload?.ticker) ? "Call" : "Put"]} />
-                    <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} payload={[
-                      { value: "Call", type: "square", color: "hsl(var(--bull))" },
-                      { value: "Put", type: "square", color: "hsl(var(--bear))" },
-                    ]} />
+                    <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} content={() => (
+                      <div className="flex gap-4 justify-center mt-1 font-mono text-[11px]">
+                        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--bull))" }} />Call</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--bear))" }} />Put</span>
+                      </div>
+                    )} />
                     <Bar dataKey="premium">
                       {contracts.map((c, i) => (
                         <Cell key={i} fill={isCallTicker(c.ticker) ? "hsl(var(--bull))" : "hsl(var(--bear))"} />
