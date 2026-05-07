@@ -75,7 +75,7 @@ export default function MarketStatusBar() {
           </div>
         )}
         {!ticker && <div className="ml-auto text-muted-foreground">{t.market.noTicker}</div>}
-        <LanguageSwitcher />
+        <div className={cn(ticker ? "" : "")}><LanguageSwitcher /></div>
       </div>
     </div>
   );
