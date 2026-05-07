@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
     } = body;
 
     // Pull daily aggregates from Polygon
-    const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
+    const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
     const r = await fetch(url);
     const data = await r.json();
     if (!data.results?.length) return json({ error: "no price data", details: data }, 400);
