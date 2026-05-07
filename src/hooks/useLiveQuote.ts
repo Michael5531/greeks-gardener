@@ -11,7 +11,13 @@ export type LiveQuote = {
   updated: number;
 };
 
-export function useLiveQuote(ticker: string | null, intervalMs = 5000) {
+/**
+ * Global underlying-price refresh interval (30s) — applied everywhere.
+ * The `intervalMs` argument is kept for backward-compat but ignored.
+ */
+export const UNDERLYING_REFRESH_MS = 30_000;
+
+export function useLiveQuote(ticker: string | null, _intervalMs = UNDERLYING_REFRESH_MS) {
   const [quote, setQuote] = useState<LiveQuote | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,7 +39,7 @@ export function useLiveQuote(ticker: string | null, intervalMs = 5000) {
       .finally(() => setLoading(false));
   }, [ticker]);
 
-  useInterval(fetchOnce, intervalMs, { enabled: !!ticker });
+  useInterval(fetchOnce, UNDERLYING_REFRESH_MS, { enabled: !!ticker });
 
   useEffect(() => {
     const onRefresh = () => fetchOnce();
