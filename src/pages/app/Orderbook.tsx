@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import TickerSearch from "@/components/TickerSearch";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { getOptionQuotes, getOptionTrades, getOptionsChain } from "@/lib/polygon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,8 +11,7 @@ import { useInterval } from "@/hooks/useInterval";
 import { computeSessionET, useLiveQuote } from "@/hooks/useLiveQuote";
 
 export default function Orderbook() {
-  const [params, setParams] = useSearchParams();
-  const ticker = params.get("ticker") ?? "";
+  const [ticker, setTicker] = useSelectedTicker();
   const { expirations } = useOptionsChain(ticker || null);
   const { quote } = useLiveQuote(ticker || null, 5000);
 
@@ -107,7 +106,7 @@ export default function Orderbook() {
           <h1 className="text-2xl font-semibold tracking-tight">实时盘口</h1>
           <p className="text-sm text-muted-foreground">期权 Quotes & Trades 深度热力图 · 仅在交易时段实时更新</p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
+        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       {ticker && (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import TickerSearch from "@/components/TickerSearch";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { getOptionsChain } from "@/lib/polygon";
 import { fmt } from "@/lib/optionUtils";
@@ -15,8 +15,7 @@ import DTEStackedChart, { buildExpColors } from "@/components/charts/DTEStackedC
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 
 export default function GEX() {
-  const [params, setParams] = useSearchParams();
-  const ticker = params.get("ticker") ?? "";
+  const [ticker, setTicker] = useSelectedTicker();
   const { data: baseData, expirations, loading } = useOptionsChain(ticker || null);
   const [selectedExps, setSelectedExps] = useState<string[]>([]);
   const [extraData, setExtraData] = useState<Record<string, any[]>>({});
@@ -230,7 +229,7 @@ export default function GEX() {
               <TabsTrigger value="oi" className="text-xs font-mono">OI</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
+          <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
         </div>
       </div>
 
