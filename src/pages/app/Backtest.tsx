@@ -6,7 +6,9 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import ChartSizer from "@/components/charts/ChartSizer";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { fmt, fmtPct } from "@/lib/optionUtils";
 import { STRATEGIES, getStrategy } from "@/lib/strategies";
 import StrategyCard from "@/components/StrategyCard";
@@ -14,7 +16,10 @@ import { getOptionsChain, getSnapshot } from "@/lib/polygon";
 import { useComputeGEX } from "@/hooks/useComputeGEX";
 
 export default function Backtest() {
-  const [ticker, setTicker] = useState("AAPL");
+  const [selTicker, setSelTicker] = useSelectedTicker();
+  const [ticker, setTicker] = useState(selTicker || "AAPL");
+  // Auto-sync from globally-selected ticker (Dashboard / Chain / GEX / etc.)
+  useEffect(() => { if (selTicker && selTicker !== ticker) setTicker(selTicker); /* eslint-disable-next-line */ }, [selTicker]);
   const [start, setStart] = useState("2024-01-01");
   const [end, setEnd] = useState("2024-12-31");
   const [strategy, setStrategy] = useState("covered_call");
@@ -98,7 +103,7 @@ export default function Backtest() {
 
       <div className="rounded-lg border border-border bg-card/40 p-4 grid md:grid-cols-7 gap-3">
         <Field label={`标的${spot != null ? ` · $${spot.toFixed(2)}` : ""}`}>
-          <Input className="font-mono" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} />
+          <Input className="font-mono" value={ticker} onChange={e => { const t = e.target.value.toUpperCase(); setTicker(t); setSelTicker(t); }} />
         </Field>
         <Field label="开始日期"><DatePicker value={start} onChange={setStart} /></Field>
         <Field label="结束日期"><DatePicker value={end} onChange={setEnd} /></Field>
