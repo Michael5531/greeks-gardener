@@ -13,6 +13,13 @@ import OptionPricer from "@/components/OptionPricer";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 
+function isCallTicker(t?: string) {
+  if (!t) return false;
+  // OCC: O:UNDERYYMMDD[C|P]00000000  -> check the C/P after the 6-digit date
+  const m = /[A-Z](\d{6})([CP])\d{8}$/.exec(t);
+  return m ? m[2] === "C" : false;
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
 const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
 
@@ -270,8 +277,18 @@ export default function Flow() {
                     <CartesianGrid stroke="hsl(var(--grid-line))" />
                     <XAxis type="number" tickFormatter={v => `$${(v/1e6).toFixed(1)}M`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
                     <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} width={140} />
-                    <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any) => `$${(v/1e6).toFixed(2)}M`} />
-                    <Bar dataKey="premium" fill="hsl(var(--primary))" />
+                    <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any, _n, p: any) => [`$${(v/1e6).toFixed(2)}M`, isCallTicker(p?.payload?.ticker) ? "Call" : "Put"]} />
+                    <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} content={() => (
+                      <div className="flex gap-4 justify-center mt-1 font-mono text-[11px]">
+                        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--bull))" }} />Call</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--bear))" }} />Put</span>
+                      </div>
+                    )} />
+                    <Bar dataKey="premium">
+                      {contracts.map((c, i) => (
+                        <Cell key={i} fill={isCallTicker(c.ticker) ? "hsl(var(--bull))" : "hsl(var(--bear))"} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
