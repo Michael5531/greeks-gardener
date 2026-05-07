@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getOptionsChain } from "@/lib/polygon";
+import { getOptionsChain, getOptionsExpirations } from "@/lib/polygon";
 
 export function useOptionsChain(ticker: string | null, expiration?: string) {
   const [data, setData] = useState<any[]>([]);
@@ -13,12 +13,17 @@ export function useOptionsChain(ticker: string | null, expiration?: string) {
     getOptionsChain(ticker, expiration)
       .then(r => {
         setData(r);
-        const exps = Array.from(new Set(r.map((x: any) => x.details?.expiration_date).filter(Boolean))).sort();
-        setExpirations(exps as string[]);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [ticker, expiration]);
+
+  // Fetch the FULL list of expirations independently of the snapshot chain,
+  // which is capped by the snapshot endpoint's limit.
+  useEffect(() => {
+    if (!ticker) { setExpirations([]); return; }
+    getOptionsExpirations(ticker).then(setExpirations).catch(() => {});
+  }, [ticker]);
 
   return { data, loading, error, expirations };
 }
