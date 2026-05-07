@@ -1,7 +1,7 @@
 import type { Dict } from "./zh";
 const en: Dict = {
   common: { loading: "Loading…", run: "Run", reset: "Reset", cancel: "Cancel", confirm: "Confirm", search: "Search", noData: "No data", select: "Select", from: "From", to: "To", date: "Date", today: "Today", price: "Price", change: "Change", help: "Help", close: "Close" },
-  market: { pre: "Pre", regular: "Open", after: "After", closed: "Closed", noTicker: "No ticker", ytd: "YTD", since: "Since open", prevDay: "Prev session" },
+  market: { pre: "Pre", regular: "Open", after: "After", closed: "Closed", noTicker: "No ticker", ytd: "YTD", since: "Since open", prevDay: "Prev session", untilOpen: "To open", untilClose: "To close", untilPre: "To pre", refresh: "Refresh" },
   nav: { dashboard: "Overview", chain: "Chain", greeks: "3D Greeks", gex: "GEX", orderbook: "Orderbook", flow: "Flow", backtest: "Backtest", signals: "Signals", logout: "Sign out" },
   dashboard: { title: "Overview", subtitle: "Manage your watchlist and jump into chain & Greeks analysis.", placeholder: "Search US ticker (AAPL, TSLA, SPY…)", empty: "Watchlist is empty. Search to add.", openChain: "Chain", open3D: "3D Greeks" },
   gex: { title: "GEX Analysis", subtitle: "Gamma Exposure by strike · pin levels & Zero Gamma", expirations: "Expirations", add: "Add", spot: "Spot", totalGex: "Total Net GEX", zeroGamma: "Zero Gamma", contracts: "Contracts", oi: "Total OI", byStrike: "by Strike", byExp: "by Expiration", aiTitle: "AI GEX Insight + Strategies", aiSub: "Recommendations based on current GEX structure", aiRun: "Run AI Analysis", aiLoading: "Analyzing" },

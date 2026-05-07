@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getSnapshot } from "@/lib/polygon";
 import { useInterval } from "./useInterval";
 
@@ -17,7 +17,7 @@ export function useLiveQuote(ticker: string | null, intervalMs = 5000) {
 
   useEffect(() => { setQuote(null); }, [ticker]);
 
-  useInterval(() => {
+  const fetchOnce = useCallback(() => {
     if (!ticker) return;
     setLoading(true);
     getSnapshot(ticker)
@@ -31,9 +31,17 @@ export function useLiveQuote(ticker: string | null, intervalMs = 5000) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, intervalMs, { enabled: !!ticker });
+  }, [ticker]);
 
-  return { quote, loading };
+  useInterval(fetchOnce, intervalMs, { enabled: !!ticker });
+
+  useEffect(() => {
+    const onRefresh = () => fetchOnce();
+    window.addEventListener("optix:refresh", onRefresh);
+    return () => window.removeEventListener("optix:refresh", onRefresh);
+  }, [fetchOnce]);
+
+  return { quote, loading, refresh: fetchOnce };
 }
 
 export type MarketSession = "pre" | "regular" | "after" | "closed";
