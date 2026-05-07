@@ -75,42 +75,68 @@ Deno.serve(async (req) => {
       return S * Math.exp((r0 + 0.5 * iv * iv) * T - z * iv * Math.sqrt(T));
     }
 
+    type LegSpec = { type: "call" | "put"; side: "long" | "short"; strikeOffsetPct: number };
+    function specFor(strat: string): LegSpec[] {
+      switch (strat) {
+        case "long_call": return [{ type: "call", side: "long", strikeOffsetPct: 0 }];
+        case "long_put": return [{ type: "put", side: "long", strikeOffsetPct: 0 }];
+        case "leap_call": return [{ type: "call", side: "long", strikeOffsetPct: -0.10 }];
+        case "long_straddle": return [
+          { type: "call", side: "long", strikeOffsetPct: 0 },
+          { type: "put", side: "long", strikeOffsetPct: 0 },
+        ];
+        case "covered_call": return [{ type: "call", side: "short", strikeOffsetPct: 0.05 }];
+        case "cash_secured_put": return [{ type: "put", side: "short", strikeOffsetPct: -0.05 }];
+        default: return [];
+      }
+    }
+    const specs = specFor(strategy_type);
+    if (!specs.length) return json({ error: `strategy '${strategy_type}' 暂不支持引擎回测` }, 400);
+
+    function legPrice(S: number, K: number, T: number, type: "call" | "put") {
+      return bs(S, K, T, r0, iv, type);
+    }
+
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
       const date = new Date(bar.t).toISOString().slice(0, 10);
       const S = bar.c;
 
-      // Manage open position
       if (position) {
         const T = Math.max(0, (position.expiry - bar.t) / (1000 * 60 * 60 * 24 * 365));
-        const optType: "call" | "put" = strategy_type === "covered_call" ? "call" : "put";
-        const currentPremium = bs(S, position.strike, T, r0, iv, optType);
-        const pnl = (position.entry_premium - currentPremium) * 100; // short option PnL
+        let nowVal = 0, entryVal = 0;
+        for (const l of position.legs) {
+          const cur = legPrice(S, l.strike, T, l.type);
+          const sign = l.side === "long" ? 1 : -1;
+          nowVal += sign * cur;
+          entryVal += sign * l.entry_premium;
+        }
+        const pnl = (nowVal - entryVal) * 100;
+        const debit = entryVal; // positive for long-debit strategies
         const exitByExpiry = T <= 0;
-        const exitByProfit = pnl >= position.entry_premium * 100 * profit_take;
-        const exitByStop = currentPremium >= position.entry_premium * (1 + stop_loss);
+        const exitByProfit = debit > 0
+          ? pnl >= debit * 100 * profit_take
+          : pnl >= -debit * 100 * profit_take;
+        const exitByStop = debit > 0
+          ? pnl <= -debit * 100 * stop_loss
+          : pnl <= debit * 100 * stop_loss * -1;
         if (exitByExpiry || exitByProfit || exitByStop) {
           cash += pnl;
-          trades.push({
-            ...position,
-            exit_date: date, exit_price: currentPremium,
-            pnl, reason: exitByExpiry ? "expiry" : exitByProfit ? "profit_take" : "stop_loss",
-          });
+          trades.push({ ...position, exit_date: date, exit_spot: S, pnl, reason: exitByExpiry ? "expiry" : exitByProfit ? "profit_take" : "stop_loss" });
           position = null;
         }
       }
 
-      // Open new position if flat
       if (!position) {
         const T = dte / 365;
-        const optType: "call" | "put" = strategy_type === "covered_call" ? "call" : "put";
-        const K = strikeForDelta(S, T, delta_target, optType);
-        const premium = bs(S, K, T, r0, iv, optType);
+        const legs = specs.map(s => {
+          const K = Math.round(S * (1 + s.strikeOffsetPct) * 100) / 100;
+          const premium = legPrice(S, K, T, s.type);
+          return { type: s.type, side: s.side, strike: K, entry_premium: premium };
+        });
         position = {
-          entry_date: date, entry_spot: S, strike: Math.round(K * 100) / 100,
-          entry_premium: premium,
+          entry_date: date, entry_spot: S, legs,
           expiry: bar.t + dte * 24 * 60 * 60 * 1000,
-          type: optType,
         };
       }
 
