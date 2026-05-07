@@ -6,7 +6,7 @@ import * as THREE from "three";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { getOptionsChain } from "@/lib/polygon";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt } from "@/lib/optionUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -234,6 +234,44 @@ export default function Greeks3D() {
   const pcrOI = totals.callOI ? totals.putOI / totals.callOI : 0;
   const pcrVol = totals.callVol ? totals.putVol / totals.callVol : 0;
 
+  // underlying price (from any contract that carries it)
+  const underlyingPrice = useMemo(() => {
+    for (const d of data) {
+      const p = d.underlying_asset?.price;
+      if (p != null) return p as number;
+    }
+    return null;
+  }, [data]);
+
+  // Per-DTE pivot: rows = strike, one numeric column per selected expiration
+  const expColors = useMemo(() => {
+    const list = [...selectedExps].sort();
+    const map: Record<string, string> = {};
+    const N = Math.max(1, list.length);
+    list.forEach((e, i) => { map[e] = `hsl(${Math.round((i * 360) / N)} 70% 55%)`; });
+    return map;
+  }, [selectedExps]);
+
+  const { strikePivotOI, strikePivotVol } = useMemo(() => {
+    const oi = new Map<number, any>();
+    const vol = new Map<number, any>();
+    for (const d of data) {
+      const k = d.details?.strike_price;
+      const e = d.details?.expiration_date;
+      if (k == null || !e || !selectedExps.includes(e)) continue;
+      const oiRow = oi.get(k) ?? { strike: k };
+      oiRow[e] = (oiRow[e] ?? 0) + (d.open_interest ?? 0);
+      oi.set(k, oiRow);
+      const vRow = vol.get(k) ?? { strike: k };
+      vRow[e] = (vRow[e] ?? 0) + (d.day?.volume ?? 0);
+      vol.set(k, vRow);
+    }
+    return {
+      strikePivotOI: Array.from(oi.values()).sort((a, b) => a.strike - b.strike),
+      strikePivotVol: Array.from(vol.values()).sort((a, b) => a.strike - b.strike),
+    };
+  }, [data, selectedExps]);
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -330,16 +368,16 @@ export default function Greeks3D() {
             <Stat label="Expiries" value={String(byExp.length)} />
           </div>
 
-          <Section title="未平仓量 OI · 按行权价" subtitle="Call vs Put 堆叠">
-            <StackedChart data={byStrike} xKey="strike" aKey="callOI" bKey="putOI" />
+          <Section title="未平仓量 OI · 按行权价" subtitle="不同到期日叠加显示">
+            <DTEStackedChart data={strikePivotOI} xKey="strike" exps={[...selectedExps].sort()} colors={expColors} refX={underlyingPrice} />
           </Section>
 
           <Section title="未平仓量 OI · 按到期日" subtitle="Call vs Put 堆叠">
             <StackedChart data={byExp} xKey="exp" aKey="callOI" bKey="putOI" />
           </Section>
 
-          <Section title="成交量 Volume · 按行权价" subtitle="Call vs Put 堆叠">
-            <StackedChart data={byStrike} xKey="strike" aKey="callVol" bKey="putVol" />
+          <Section title="成交量 Volume · 按行权价" subtitle="不同到期日叠加显示">
+            <DTEStackedChart data={strikePivotVol} xKey="strike" exps={[...selectedExps].sort()} colors={expColors} refX={underlyingPrice} />
           </Section>
 
           <Section title="成交量 Volume · 按到期日" subtitle="Call vs Put 堆叠">
@@ -392,6 +430,37 @@ function StackedChart({ data, xKey, aKey, bKey }: { data: any[]; xKey: string; a
         <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v) => v.startsWith("call") ? "Call" : "Put"} />
         <Bar dataKey={aKey} stackId="s" fill="hsl(var(--bull))" />
         <Bar dataKey={bKey} stackId="s" fill="hsl(var(--bear))" />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function DTEStackedChart({
+  data, xKey, exps, colors, refX,
+}: { data: any[]; xKey: string; exps: string[]; colors: Record<string, string>; refX: number | null }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+        <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
+        <XAxis dataKey={xKey} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+        <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
+        <Tooltip
+          contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}
+          formatter={(v: number, name: string) => [fmtK(v), name]}
+        />
+        <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} />
+        {exps.map(e => (
+          <Bar key={e} dataKey={e} stackId="dte" fill={colors[e]} name={e} />
+        ))}
+        {refX != null && (
+          <ReferenceLine
+            x={refX}
+            stroke="hsl(var(--foreground))"
+            strokeDasharray="4 4"
+            strokeWidth={1.5}
+            label={{ value: `Spot ${refX.toFixed(2)}`, position: "top", fill: "hsl(var(--foreground))", fontSize: 11, fontFamily: "JetBrains Mono" }}
+          />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );
