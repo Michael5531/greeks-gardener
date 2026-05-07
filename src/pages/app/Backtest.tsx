@@ -210,8 +210,9 @@ function MiniGEX({ ticker, spot }: { ticker: string; spot: number | null }) {
         {error && <div className="h-full grid place-items-center text-xs text-destructive">{error}</div>}
         {!loading && !error && rows.length === 0 && <div className="h-full grid place-items-center text-xs text-muted-foreground">暂无数据</div>}
         {!loading && rows.length > 0 && (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
+          <ChartSizer>
+            {({ width, height }) => (
+            <BarChart width={width} height={height} data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
               <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
               <XAxis dataKey="strike" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
               <YAxis tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => (v / 1e6).toFixed(1) + "M"} />
@@ -225,7 +226,8 @@ function MiniGEX({ ticker, spot }: { ticker: string; spot: number | null }) {
               {flip != null && <ReferenceLine x={flip} stroke="hsl(var(--primary))" strokeDasharray="2 4" label={{ value: `Flip ${flip.toFixed(0)}`, fontSize: 10, fill: "hsl(var(--primary))" }} />}
               <Bar dataKey="gex" fill="hsl(var(--primary))" />
             </BarChart>
-          </ResponsiveContainer>
+            )}
+          </ChartSizer>
         )}
       </div>
     </div>
@@ -244,8 +246,9 @@ function ResultPanel({ r }: { r: any }) {
         <Stat label="交易数" value={String(m.trades_count ?? 0)} />
       </div>
       <div className="rounded-lg border border-border bg-card/40 p-4 h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={r.equity_curve ?? []}>
+        <ChartSizer>
+          {({ width, height }) => (
+          <AreaChart width={width} height={height} data={r.equity_curve ?? []}>
             <defs>
               <linearGradient id="eq" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.5}/>
@@ -258,7 +261,8 @@ function ResultPanel({ r }: { r: any }) {
             <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}/>
             <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#eq)" strokeWidth={2} />
           </AreaChart>
-        </ResponsiveContainer>
+          )}
+        </ChartSizer>
       </div>
     </div>
   );
