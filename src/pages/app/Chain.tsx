@@ -152,7 +152,11 @@ function ChainTable({ title, rows, accent, spot, scrollRef, onScroll, onRowClick
                   )}
                   {fmt(r.details.strike_price)}
                 </td>
-                <td className="text-right px-2 py-1">{fmt(r.last_quote?.bid)}/{fmt(r.last_quote?.ask)}</td>
+                <td className="text-right px-2 py-1">
+                  {fmt(r.last_quote?.bid ?? r.last_quote?.bid_price ?? r.last_trade?.price)}
+                  /
+                  {fmt(r.last_quote?.ask ?? r.last_quote?.ask_price ?? r.last_trade?.price)}
+                </td>
                 <td className="text-right px-2 py-1">{fmtPct(r.implied_volatility)}</td>
                 <td className="text-right px-2 py-1">{fmt(r.greeks?.delta, 3)}</td>
                 <td className="text-right px-2 py-1">{fmt(r.greeks?.gamma, 4)}</td>
