@@ -4,11 +4,22 @@ import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt, fmtPct } from "@/lib/optionUtils";
+import OptionQuoteHistory from "@/components/OptionQuoteHistory";
 
 export default function Chain() {
   const [ticker, setTicker] = useSelectedTicker();
   const [exp, setExp] = useState<string | undefined>();
   const { data, loading, error, expirations } = useOptionsChain(ticker || null, exp);
+  const [histOpen, setHistOpen] = useState(false);
+  const [histContract, setHistContract] = useState<{ ticker: string; label: string } | null>(null);
+  const openHistory = (r: any) => {
+    const cp = r.details?.contract_type === "call" ? "C" : "P";
+    setHistContract({
+      ticker: r.details.ticker,
+      label: `${ticker} ${r.details.expiration_date} ${cp} ${r.details.strike_price}`,
+    });
+    setHistOpen(true);
+  };
 
   useEffect(() => {
     if (expirations.length && (!exp || !expirations.includes(exp))) setExp(expirations[0]);
@@ -82,16 +93,23 @@ export default function Chain() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <ChainTable title="Calls" rows={calls} accent="bull" spot={spot} scrollRef={callsRef} onScroll={onScroll("c")} />
-        <ChainTable title="Puts" rows={puts} accent="bear" spot={spot} scrollRef={putsRef} onScroll={onScroll("p")} />
+        <ChainTable title="Calls" rows={calls} accent="bull" spot={spot} scrollRef={callsRef} onScroll={onScroll("c")} onRowClick={openHistory} />
+        <ChainTable title="Puts" rows={puts} accent="bear" spot={spot} scrollRef={putsRef} onScroll={onScroll("p")} onRowClick={openHistory} />
       </div>
+      <OptionQuoteHistory
+        open={histOpen}
+        onOpenChange={setHistOpen}
+        optionTicker={histContract?.ticker ?? null}
+        label={histContract?.label}
+      />
     </div>
   );
 }
 
-function ChainTable({ title, rows, accent, spot, scrollRef, onScroll }: {
+function ChainTable({ title, rows, accent, spot, scrollRef, onScroll, onRowClick }: {
   title: string; rows: any[]; accent: "bull" | "bear"; spot: number | null;
   scrollRef: React.RefObject<HTMLDivElement>; onScroll: (e: React.UIEvent<HTMLDivElement>) => void;
+  onRowClick?: (row: any) => void;
 }) {
   // index of strike just at/above spot — we'll render the spot line above this row
   let spotIdx = -1;
@@ -122,7 +140,9 @@ function ChainTable({ title, rows, accent, spot, scrollRef, onScroll }: {
               <tr
                 key={r.details.ticker}
                 data-idx={i}
-                className={`border-t border-border/50 hover:bg-secondary/30 ${
+                onClick={() => onRowClick?.(r)}
+                title="点击查看历史 Bid/Ask"
+                className={`border-t border-border/50 hover:bg-secondary/40 cursor-pointer ${
                   i === spotIdx ? "border-t-2 border-t-primary" : ""
                 }`}
               >
