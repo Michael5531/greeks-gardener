@@ -51,7 +51,7 @@ async function fetchAtmIvForDate(
     // Pick a contract whose expiration is ~dte days out and strike near spot
     const targetExp = new Date(new Date(date).getTime() + dte * 86400000).toISOString().slice(0, 10);
     const lo = (spot * 0.85).toFixed(2), hi = (spot * 1.15).toFixed(2);
-    const ref = `https://api.massive.com/v3/reference/options/contracts?underlying_ticker=${ticker}&as_of=${date}&expiration_date.gte=${date}&expiration_date.lte=${targetExp.slice(0,10)}&strike_price.gte=${lo}&strike_price.lte=${hi}&limit=100&apiKey=${apiKey}`;
+    const ref = `https://api.polygon.io/v3/reference/options/contracts?underlying_ticker=${ticker}&as_of=${date}&expiration_date.gte=${date}&expiration_date.lte=${targetExp.slice(0,10)}&strike_price.gte=${lo}&strike_price.lte=${hi}&limit=100&apiKey=${apiKey}`;
     const refR = await fetch(ref);
     const refJ = await refR.json();
     const contracts: any[] = refJ?.results ?? [];
@@ -65,7 +65,7 @@ async function fetchAtmIvForDate(
     const picks = [calls[0], puts[0]].filter(Boolean);
     const ivs: number[] = [];
     for (const c of picks) {
-      const aggUrl = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(c.ticker)}/range/1/day/${date}/${date}?apiKey=${apiKey}`;
+      const aggUrl = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(c.ticker)}/range/1/day/${date}/${date}?apiKey=${apiKey}`;
       const aR = await fetch(aggUrl);
       const aJ = await aR.json();
       const close = aJ?.results?.[0]?.c;
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     } = body;
 
     // Pull daily aggregates from Polygon
-    const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
+    const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
     const r = await fetch(url);
     const data = await r.json();
     if (!data.results?.length) return json({ error: "no price data", details: data }, 400);

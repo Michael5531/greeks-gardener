@@ -205,6 +205,7 @@ Deno.serve(async (req) => {
       const dd = await rr.json();
       return { data: dd, status: rr.status };
     });
+    if (r.status >= 400) return json(fallbackPayload(action, r.data, r.status), 200);
     return json(r.data, r.status);
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
@@ -216,4 +217,10 @@ function json(data: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function fallbackPayload(action: string, data: any, status: number) {
+  const message = data?.message ?? data?.error ?? `Upstream returned ${status}`;
+  if (action === "market-status") return { status: "OK", fallback: true, upstream_status: status, message };
+  return { status: "OK", results: [], fallback: true, upstream_status: status, message };
 }

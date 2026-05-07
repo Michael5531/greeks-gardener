@@ -23,9 +23,9 @@ export default function AppLayout() {
   ];
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-60 border-r border-border bg-card/40 backdrop-blur flex flex-col">
-        <div className="px-5 py-5 border-b border-border">
+    <div className="min-h-screen flex flex-col md:flex-row">
+      <aside className="md:w-60 md:min-h-screen border-t md:border-t-0 md:border-r border-border bg-card/80 md:bg-card/40 backdrop-blur flex md:flex-col fixed md:sticky bottom-0 md:top-0 left-0 right-0 md:right-auto z-50 md:z-auto">
+        <div className="hidden md:block px-5 py-5 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-md grid place-items-center" style={{ background: "var(--gradient-primary)" }}>
               <TrendingUp className="h-4 w-4 text-background" />
@@ -36,14 +36,14 @@ export default function AppLayout() {
             </div>
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-2 md:p-3 flex md:block gap-1 md:space-y-1 overflow-x-auto md:overflow-visible">
           {nav.map(n => (
             <NavLink
               key={n.to} to={n.to} end={n.end}
               className={({ isActive }) => cn(
-                "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                "flex shrink-0 flex-col md:flex-row items-center gap-1 md:gap-2 min-w-[4.5rem] md:min-w-0 px-2 md:px-3 py-2 rounded-md text-[10px] md:text-sm transition-colors",
                 isActive
-                  ? "bg-secondary text-foreground border-l-2 border-primary"
+                  ? "bg-secondary text-foreground md:border-l-2 md:border-primary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
               )}
             >
@@ -52,7 +52,7 @@ export default function AppLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-border">
+        <div className="hidden md:block p-3 border-t border-border">
           <div className="px-3 py-2 text-xs text-muted-foreground truncate font-mono">{user?.email}</div>
           <Button variant="ghost" size="sm" className="w-full justify-start gap-2"
             onClick={async () => { await signOut(); navigate("/auth"); }}>
@@ -60,7 +60,7 @@ export default function AppLayout() {
           </Button>
         </div>
       </aside>
-      <main className="flex-1 min-w-0 overflow-x-hidden">
+      <main className="flex-1 min-w-0 overflow-x-hidden pb-20 md:pb-0">
         <MarketStatusBar />
         <Outlet />
         <GlobalAIChat />

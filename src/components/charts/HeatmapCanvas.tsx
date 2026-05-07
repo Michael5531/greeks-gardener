@@ -180,8 +180,8 @@ export default function HeatmapCanvas({
   }
 
   return (
-    <div ref={wrapRef} style={{ width, height, position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <canvas ref={ref} style={{ width, height, display: "block" }} />
+    <div ref={wrapRef} style={{ width: "100%", maxWidth: width, height, position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <canvas ref={ref} style={{ width: "100%", height, display: "block" }} />
       {hover && (
         <div
           className="pointer-events-none absolute z-10 rounded-md border border-border bg-popover/95 backdrop-blur px-2.5 py-1.5 text-[11px] font-mono shadow-lg"
