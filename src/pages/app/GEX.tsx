@@ -1,16 +1,37 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from "recharts";
 import { fmt } from "@/lib/optionUtils";
+import { Button } from "@/components/ui/button";
+import { Sparkles, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function GEX() {
   const [params, setParams] = useSearchParams();
   const ticker = params.get("ticker") ?? "";
   const [exp, setExp] = useState<string | undefined>();
   const { data, expirations, loading } = useOptionsChain(ticker || null);
+  const [aiText, setAiText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Quick expiration presets: closest available to today + N days
+  const pickClosestExp = (days: number): string | undefined => {
+    if (!expirations.length) return undefined;
+    const target = new Date();
+    target.setDate(target.getDate() + days);
+    const t = target.getTime();
+    let best = expirations[0];
+    let bestDiff = Math.abs(new Date(best).getTime() - t);
+    for (const e of expirations) {
+      const d = Math.abs(new Date(e).getTime() - t);
+      if (d < bestDiff) { bestDiff = d; best = e; }
+    }
+    return best;
+  };
 
   // Estimate spot from ATM contracts
   const spot = useMemo(() => {
@@ -59,6 +80,63 @@ export default function GEX() {
 
   const totalGEX = rows.reduce((a, r) => a + r.net, 0);
 
+  async function runAIAnalysis() {
+    if (!ticker || !rows.length || !spot) {
+      toast.error("请先加载数据");
+      return;
+    }
+    setAiText("");
+    setAiLoading(true);
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-gex`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ ticker, spot, expiration: exp, totalGEX, zeroGamma, rows }),
+        signal: ctrl.signal,
+      });
+      if (!resp.ok || !resp.body) {
+        const err = await resp.json().catch(() => ({}));
+        toast.error(err.error || "AI 分析失败");
+        setAiLoading(false);
+        return;
+      }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let done = false;
+      while (!done) {
+        const { value, done: d } = await reader.read();
+        if (d) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buf.indexOf("\n")) !== -1) {
+          let line = buf.slice(0, idx);
+          buf = buf.slice(idx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+          const json = line.slice(6).trim();
+          if (json === "[DONE]") { done = true; break; }
+          try {
+            const p = JSON.parse(json);
+            const c = p.choices?.[0]?.delta?.content;
+            if (c) setAiText(prev => prev + c);
+          } catch { buf = line + "\n" + buf; break; }
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== "AbortError") toast.error(e.message);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -79,6 +157,25 @@ export default function GEX() {
           <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
         </div>
       </div>
+
+      {expirations.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">快速到期:</span>
+          {[7, 14, 21].map(d => {
+            const target = pickClosestExp(d);
+            const active = exp === target;
+            return (
+              <Button key={d} variant={active ? "default" : "outline"} size="sm" className="font-mono h-7"
+                onClick={() => setExp(target)}>
+                +{d}D {target ? `· ${target.slice(5)}` : ""}
+              </Button>
+            );
+          })}
+          <Button variant={!exp ? "default" : "outline"} size="sm" className="font-mono h-7" onClick={() => setExp(undefined)}>
+            全部
+          </Button>
+        </div>
+      )}
 
       <div className="grid sm:grid-cols-3 gap-3">
         <Stat label="Spot" value={spot ? `$${fmt(spot)}` : "—"} />
@@ -105,6 +202,28 @@ export default function GEX() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-accent" />
+              AI GEX 解读 + 期权策略
+            </h2>
+            <p className="text-xs text-muted-foreground">基于当前 GEX 结构推荐所有主流期权组合</p>
+          </div>
+          <Button onClick={runAIAnalysis} disabled={aiLoading || !rows.length} size="sm">
+            {aiLoading ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />分析中</> : "运行 AI 分析"}
+          </Button>
+        </div>
+        {aiText ? (
+          <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed text-foreground/90 max-h-[600px] overflow-auto">{aiText}</pre>
+        ) : (
+          <div className="text-xs text-muted-foreground py-8 text-center">
+            {rows.length ? "点击右上角运行 AI 分析" : "请先选择标的并加载数据"}
+          </div>
         )}
       </div>
     </div>
