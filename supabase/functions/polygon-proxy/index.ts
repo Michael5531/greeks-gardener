@@ -44,10 +44,21 @@ Deno.serve(async (req) => {
         break;
       }
       case "options-snapshot-chain": {
-        endpoint = `/v3/snapshot/options/${encodeURIComponent(body.ticker)}`;
-        if (body.expiration_date) params.set("expiration_date", body.expiration_date);
-        params.set("limit", "250");
-        break;
+        // Paginate through the snapshot chain to gather every contract,
+        // not just the first 250.
+        const expQ = body.expiration_date ? `&expiration_date=${encodeURIComponent(body.expiration_date)}` : "";
+        let next = `${POLYGON_BASE}/v3/snapshot/options/${encodeURIComponent(body.ticker)}?limit=250${expQ}&apiKey=${apiKey}`;
+        const all: any[] = [];
+        let pages = 0;
+        const maxPages = body.expiration_date ? 6 : 20;
+        while (next && pages < maxPages) {
+          const rr = await fetch(next);
+          const dd = await rr.json();
+          if (Array.isArray(dd.results)) all.push(...dd.results);
+          pages++;
+          next = dd.next_url ? `${dd.next_url}&apiKey=${apiKey}` : "";
+        }
+        return json({ results: all });
       }
       case "options-expirations": {
         // Paginate through contracts to get every expiration date
