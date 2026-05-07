@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
@@ -17,12 +17,53 @@ export default function Chain() {
   const calls = filtered.filter(d => d.details?.contract_type === "call").sort((a,b) => a.details.strike_price - b.details.strike_price);
   const puts = filtered.filter(d => d.details?.contract_type === "put").sort((a,b) => a.details.strike_price - b.details.strike_price);
 
+  const spot = useMemo(() => {
+    for (const d of data) {
+      const p = d.underlying_asset?.price;
+      if (typeof p === "number" && p > 0) return p;
+    }
+    return null;
+  }, [data]);
+
+  // Synced scroll between Calls / Puts
+  const callsRef = useRef<HTMLDivElement>(null);
+  const putsRef = useRef<HTMLDivElement>(null);
+  const syncing = useRef(false);
+  const onScroll = (src: "c" | "p") => (e: React.UIEvent<HTMLDivElement>) => {
+    if (syncing.current) return;
+    const top = (e.target as HTMLDivElement).scrollTop;
+    syncing.current = true;
+    const other = src === "c" ? putsRef.current : callsRef.current;
+    if (other) other.scrollTop = top;
+    requestAnimationFrame(() => { syncing.current = false; });
+  };
+
+  // Scroll to ATM when data/spot changes
+  useEffect(() => {
+    if (!spot || !calls.length) return;
+    let atmIdx = 0, best = Infinity;
+    calls.forEach((r, i) => {
+      const d = Math.abs(r.details.strike_price - spot);
+      if (d < best) { best = d; atmIdx = i; }
+    });
+    requestAnimationFrame(() => {
+      [callsRef.current, putsRef.current].forEach(el => {
+        if (!el) return;
+        const row = el.querySelector<HTMLTableRowElement>(`tbody tr[data-idx="${atmIdx}"]`);
+        if (row) el.scrollTop = row.offsetTop - el.clientHeight / 2 + row.clientHeight / 2;
+      });
+    });
+  }, [spot, calls.length, puts.length, exp]);
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">期权链</h1>
-          <p className="text-sm text-muted-foreground">{ticker || "搜索一个标的开始"}</p>
+          <p className="text-sm text-muted-foreground">
+            {ticker || "搜索一个标的开始"}
+            {spot != null && <span className="ml-2 font-mono text-primary">${fmt(spot)}</span>}
+          </p>
         </div>
         <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
       </div>
@@ -40,18 +81,27 @@ export default function Chain() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <ChainTable title="Calls" rows={calls} accent="bull" />
-        <ChainTable title="Puts" rows={puts} accent="bear" />
+        <ChainTable title="Calls" rows={calls} accent="bull" spot={spot} scrollRef={callsRef} onScroll={onScroll("c")} />
+        <ChainTable title="Puts" rows={puts} accent="bear" spot={spot} scrollRef={putsRef} onScroll={onScroll("p")} />
       </div>
     </div>
   );
 }
 
-function ChainTable({ title, rows, accent }: { title: string; rows: any[]; accent: "bull" | "bear" }) {
+function ChainTable({ title, rows, accent, spot, scrollRef, onScroll }: {
+  title: string; rows: any[]; accent: "bull" | "bear"; spot: number | null;
+  scrollRef: React.RefObject<HTMLDivElement>; onScroll: (e: React.UIEvent<HTMLDivElement>) => void;
+}) {
+  // index of strike just at/above spot — we'll render the spot line above this row
+  let spotIdx = -1;
+  if (spot != null) {
+    spotIdx = rows.findIndex(r => r.details.strike_price >= spot);
+    if (spotIdx === -1) spotIdx = rows.length;
+  }
   return (
     <div className="rounded-lg border border-border bg-card/40 overflow-hidden">
       <div className={`px-4 py-2 text-sm font-semibold border-b border-border ${accent === "bull" ? "text-bull" : "text-bear"}`}>{title}</div>
-      <div className="overflow-auto max-h-[640px]">
+      <div ref={scrollRef} onScroll={onScroll} className="overflow-auto max-h-[640px]">
         <table className="w-full text-xs font-mono">
           <thead className="text-muted-foreground bg-secondary sticky top-0 z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
             <tr>
@@ -67,9 +117,20 @@ function ChainTable({ title, rows, accent }: { title: string; rows: any[]; accen
           </thead>
           <tbody>
             {rows.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">无数据</td></tr>}
-            {rows.map((r) => (
-              <tr key={r.details.ticker} className="border-t border-border/50 hover:bg-secondary/30">
-                <td className="text-right px-2 py-1">{fmt(r.details.strike_price)}</td>
+            {rows.map((r, i) => (
+              <tr
+                key={r.details.ticker}
+                data-idx={i}
+                className={`border-t border-border/50 hover:bg-secondary/30 ${
+                  i === spotIdx ? "border-t-2 border-t-primary" : ""
+                }`}
+              >
+                <td className="text-right px-2 py-1">
+                  {i === spotIdx && spot != null && (
+                    <span className="mr-1 text-[10px] text-primary">${fmt(spot)}</span>
+                  )}
+                  {fmt(r.details.strike_price)}
+                </td>
                 <td className="text-right px-2 py-1">{fmt(r.last_quote?.bid)}/{fmt(r.last_quote?.ask)}</td>
                 <td className="text-right px-2 py-1">{fmtPct(r.implied_volatility)}</td>
                 <td className="text-right px-2 py-1">{fmt(r.greeks?.delta, 3)}</td>
