@@ -229,27 +229,34 @@ export default function Flow() {
 
           <div className="rounded-lg border border-border bg-card/40 p-4">
             <div className="text-sm font-semibold mb-2">
-              Call ↑ / Put ↓ 大单 Premium
-              <span className="text-xs text-muted-foreground ml-2">向上为 call，向下为 put · 单位 $</span>
+              Call ↑ / Put ↓ 大单 Premium · 按行权价
+              <span className="text-xs text-muted-foreground ml-2">Call 在上 / Put 在下 · 不同到期日叠加</span>
             </div>
-            <div className="h-[360px]">
+            <div className="h-[420px]">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={directional} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
-                  <CartesianGrid stroke="hsl(var(--grid-line))" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} minTickGap={40} />
-                  <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
-                  <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />
+                <BarChart data={strikePremium} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
+                  <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
+                  <XAxis dataKey="strike" type="category" interval="preserveStartEnd"
+                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tickFormatter={v => `${(Math.abs(v) / 1000).toFixed(0)}K`}
+                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+                  <ReferenceLine y={0} stroke="hsl(var(--border))" />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }}
-                    formatter={(v: any, n: any, item: any) => {
-                      const p = item?.payload;
-                      const abs = Math.abs(v);
-                      return [`$${(abs / 1000).toFixed(0)}K · K=${p?.strike} · sz=${p?.size}`, n === "callPremium" ? "Call" : "Put"];
+                    formatter={(v: any, n: string) => {
+                      const isCall = n.endsWith("__c");
+                      const exp = n.replace(/__[cp]$/, "");
+                      return [`${isCall ? "C" : "P"} $${(Math.abs(v) / 1000).toFixed(0)}K`, exp];
                     }}
                   />
-                  <Bar dataKey="callPremium" fill="hsl(var(--bull))" />
-                  <Bar dataKey="putPremium" fill="hsl(var(--bear))" />
-                </ComposedChart>
+                  <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: string) => v.replace(/__[cp]$/, "")} />
+                  {expSet.map(e => (
+                    <Bar key={`${e}-c`} dataKey={`${e}__c`} stackId="x" fill={expColorMap[e]} name={`${e}__c`} />
+                  ))}
+                  {expSet.map(e => (
+                    <Bar key={`${e}-p`} dataKey={`${e}__p`} stackId="x" fill={expColorMap[e]} fillOpacity={0.55} name={`${e}__p`} legendType="none" />
+                  ))}
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
