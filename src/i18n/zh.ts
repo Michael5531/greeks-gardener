@@ -35,6 +35,6 @@ const zh = {
     premium: { name: "Premium 权利金", text: "买方为合约支付（或卖方收到）的成本。" },
     breakeven: { name: "Breakeven 盈亏平衡", text: "到期标的价格使策略盈亏为零的位置。" },
   },
-} as const;
+};
 export default zh;
 export type Dict = typeof zh;
