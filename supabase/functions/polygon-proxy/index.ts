@@ -97,10 +97,11 @@ Deno.serve(async (req) => {
         break;
       }
       case "option-quotes": {
-        const { option_ticker, gte, limit = 5000 } = body;
+        const { option_ticker, gte, lte, limit = 50000, order = "asc" } = body;
         endpoint = `/v3/quotes/${encodeURIComponent(option_ticker)}`;
         if (gte) params.set("timestamp.gte", String(gte));
-        params.set("order", "desc");
+        if (lte) params.set("timestamp.lte", String(lte));
+        params.set("order", order);
         params.set("limit", String(limit));
         params.set("sort", "timestamp");
         break;
