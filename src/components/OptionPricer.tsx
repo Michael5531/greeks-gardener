@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import TickerSearch from "./TickerSearch";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
-import { bsPrice, bsGreeks, OptType } from "@/lib/blackScholes";
+import type { OptType } from "@/lib/blackScholes";
+import { useComputePricer } from "@/hooks/useComputePricer";
 import { fmt } from "@/lib/optionUtils";
 
 export interface OptionPricerProps {
@@ -60,30 +61,20 @@ export default function OptionPricer({ externalTicker, strikeOptions, expiration
   const [daysPassed, setDaysPassed] = useState(0);
 
   const K = strike ? +strike : Math.round(spot);
-  const T = Math.max(dte / 365, 1 / 365);
   const sigma = iv / 100;
   const rate = r / 100;
 
-  const current = useMemo(() => bsPrice(spot, K, T, rate, sigma, type), [spot, K, T, rate, sigma, type]);
-  const greeks = useMemo(() => bsGreeks(spot, K, T, rate, sigma, type), [spot, K, T, rate, sigma, type]);
-
-  const newSpot = spot * (1 + pctMove / 100);
-  const newSigma = Math.max(0.01, sigma + ivMove / 100);
-  const newT = Math.max((dte - daysPassed) / 365, 1 / 365);
-  const projected = bsPrice(newSpot, K, newT, rate, newSigma, type);
-  const dPrice = projected - current;
-  const pnl = dPrice * 100;
-
-  const curve = useMemo(() => {
-    const lo = spot * 0.8, hi = spot * 1.2;
-    const out: any[] = [];
-    for (let i = 0; i < 81; i++) {
-      const p = lo + (hi - lo) * (i / 80);
-      const proj = bsPrice(p, K, newT, rate, newSigma, type);
-      out.push({ price: +p.toFixed(2), pnl: +((proj - current) * 100).toFixed(2) });
-    }
-    return out;
-  }, [spot, K, newT, rate, newSigma, type, current]);
+  const { data: pr } = useComputePricer(
+    Number.isFinite(spot) && spot > 0 && Number.isFinite(K) && K > 0 && sigma > 0 && dte > 0
+      ? { spot, strike: K, dte, iv: sigma, r: rate, type, pctMove, ivMove, daysPassed }
+      : null,
+  );
+  const current = pr?.current ?? 0;
+  const projected = pr?.projected ?? 0;
+  const dPrice = pr?.dPrice ?? 0;
+  const pnl = pr?.pnl ?? 0;
+  const greeks = pr?.greeks ?? { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
+  const curve = pr?.curve ?? [];
 
   return (
     <div className="rounded-lg border border-border bg-card/40 p-4 space-y-4">

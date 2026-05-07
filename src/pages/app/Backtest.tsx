@@ -11,6 +11,7 @@ import { fmt, fmtPct } from "@/lib/optionUtils";
 import { STRATEGIES, getStrategy } from "@/lib/strategies";
 import StrategyCard from "@/components/StrategyCard";
 import { getOptionsChain, getSnapshot } from "@/lib/polygon";
+import { useComputeGEX } from "@/hooks/useComputeGEX";
 
 export default function Backtest() {
   const [ticker, setTicker] = useState("AAPL");
@@ -180,67 +181,32 @@ function Field({ label, children }: any) {
   return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>;
 }
 
-// Lightweight GEX snapshot panel for reference. Computes Net GEX per strike from
-// the option chain. Cached in-memory by ticker for 5 minutes.
-const _gexCache = new Map<string, { ts: number; rows: any[]; total: number; flip: number | null; spot: number | null }>();
+// Lightweight GEX snapshot panel for reference. Computation happens in
+// the compute-gex edge function (cached server-side).
 function MiniGEX({ ticker, spot }: { ticker: string; spot: number | null }) {
-  const [state, setState] = useState<{ rows: any[]; total: number; flip: number | null; loading: boolean; error: string | null }>({
-    rows: [], total: 0, flip: null, loading: false, error: null,
-  });
-  useEffect(() => {
-    if (!ticker) return;
-    const cached = _gexCache.get(ticker);
-    if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
-      setState({ rows: cached.rows, total: cached.total, flip: cached.flip, loading: false, error: null });
-      return;
-    }
-    let cancel = false;
-    setState(s => ({ ...s, loading: true, error: null }));
-    getOptionsChain(ticker).then((chain: any[]) => {
-      if (cancel) return;
-      const usedSpot = spot ?? chain.find((c: any) => c.underlying_asset?.price)?.underlying_asset?.price ?? null;
-      const map = new Map<number, number>();
-      for (const c of chain) {
-        const k = c.details?.strike_price;
-        const oi = c.open_interest ?? 0;
-        const g = c.greeks?.gamma;
-        if (k == null || !oi || g == null || usedSpot == null) continue;
-        const isCall = c.details?.contract_type === "call";
-        const val = oi * g * 100 * usedSpot * usedSpot * 0.01;
-        map.set(k, (map.get(k) ?? 0) + (isCall ? val : -val));
-      }
-      let rows = Array.from(map.entries()).map(([strike, gex]) => ({ strike, gex })).sort((a, b) => a.strike - b.strike);
-      if (usedSpot) rows = rows.filter(r => r.strike > usedSpot * 0.85 && r.strike < usedSpot * 1.15);
-      let cum = 0; let flip: number | null = null;
-      for (let i = 0; i < rows.length; i++) {
-        const prev = cum; cum += rows[i].gex;
-        if (i > 0 && prev < 0 && cum >= 0) { flip = rows[i].strike; break; }
-      }
-      const total = rows.reduce((a, b) => a + b.gex, 0);
-      _gexCache.set(ticker, { ts: Date.now(), rows, total, flip, spot: usedSpot });
-      setState({ rows, total, flip, loading: false, error: null });
-    }).catch(e => { if (!cancel) setState({ rows: [], total: 0, flip: null, loading: false, error: e?.message ?? "GEX 加载失败" }); });
-    return () => { cancel = true; };
-  }, [ticker, spot]);
+  const { data: gex, loading, error } = useComputeGEX(ticker || null, []);
+  const rows = gex?.mini ?? [];
+  const total = gex?.total ?? 0;
+  const flip = gex?.flip ?? null;
 
   return (
     <div className="rounded-lg border border-border bg-card/40 p-4">
       <div className="flex items-baseline justify-between mb-2">
         <h3 className="text-sm font-semibold">当前 GEX 快照 · 参考</h3>
-        <span className="text-[11px] text-muted-foreground">仅供参考，不参与回测计算 · 5min 缓存</span>
+        <span className="text-[11px] text-muted-foreground">仅供参考，不参与回测计算 · 后端缓存</span>
       </div>
       <div className="grid sm:grid-cols-3 gap-3 mb-3">
-        <Stat label="Total Net GEX" value={Number.isFinite(state.total) && state.total !== 0 ? (state.total / 1e6).toFixed(2) + "M" : "—"} positive={state.total >= 0} />
-        <Stat label="Gamma Flip" value={state.flip != null ? state.flip.toFixed(2) : "—"} />
+        <Stat label="Total Net GEX" value={Number.isFinite(total) && total !== 0 ? (total / 1e6).toFixed(2) + "M" : "—"} positive={total >= 0} />
+        <Stat label="Gamma Flip" value={flip != null ? flip.toFixed(2) : "—"} />
         <Stat label="Spot" value={spot != null ? spot.toFixed(2) : "—"} />
       </div>
       <div className="h-60">
-        {state.loading && <div className="h-full grid place-items-center text-xs text-muted-foreground">加载中…</div>}
-        {state.error && <div className="h-full grid place-items-center text-xs text-destructive">{state.error}</div>}
-        {!state.loading && !state.error && state.rows.length === 0 && <div className="h-full grid place-items-center text-xs text-muted-foreground">暂无数据</div>}
-        {!state.loading && state.rows.length > 0 && (
+        {loading && <div className="h-full grid place-items-center text-xs text-muted-foreground">加载中…</div>}
+        {error && <div className="h-full grid place-items-center text-xs text-destructive">{error}</div>}
+        {!loading && !error && rows.length === 0 && <div className="h-full grid place-items-center text-xs text-muted-foreground">暂无数据</div>}
+        {!loading && rows.length > 0 && (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={state.rows} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
+            <BarChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
               <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
               <XAxis dataKey="strike" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
               <YAxis tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => (v / 1e6).toFixed(1) + "M"} />
@@ -251,7 +217,7 @@ function MiniGEX({ ticker, spot }: { ticker: string; spot: number | null }) {
               />
               <ReferenceLine y={0} stroke="hsl(var(--border))" />
               {spot != null && <ReferenceLine x={spot} stroke="hsl(var(--foreground))" strokeDasharray="4 4" label={{ value: `Spot ${spot.toFixed(0)}`, fontSize: 10, fill: "hsl(var(--foreground))" }} />}
-              {state.flip != null && <ReferenceLine x={state.flip} stroke="hsl(var(--primary))" strokeDasharray="2 4" label={{ value: `Flip ${state.flip.toFixed(0)}`, fontSize: 10, fill: "hsl(var(--primary))" }} />}
+              {flip != null && <ReferenceLine x={flip} stroke="hsl(var(--primary))" strokeDasharray="2 4" label={{ value: `Flip ${flip.toFixed(0)}`, fontSize: 10, fill: "hsl(var(--primary))" }} />}
               <Bar dataKey="gex" fill="hsl(var(--primary))" />
             </BarChart>
           </ResponsiveContainer>

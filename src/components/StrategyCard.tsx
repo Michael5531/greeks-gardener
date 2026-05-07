@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { getStrategy, payoffCurve } from "@/lib/strategies";
+import { getStrategy } from "@/lib/strategies";
+import { useComputePayoff } from "@/hooks/useComputePayoff";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { supabase } from "@/integrations/supabase/client";
 import { fmt, fmtPct } from "@/lib/optionUtils";
@@ -12,8 +13,13 @@ export default function StrategyCard({
   const { quote } = useLiveQuote(ticker || null, 8000);
   const spot = quote?.price ?? 100;
 
-  const { legs, grid, breakevens, maxProfit, maxLoss, netDebit } =
-    useMemo(() => payoffCurve(def, spot, iv, dte), [def, spot, iv, dte]);
+  const { data: po } = useComputePayoff(strategyId, spot, iv, dte);
+  const legs = po?.legs ?? [];
+  const grid = po?.grid ?? [];
+  const breakevens = po?.breakevens ?? [];
+  const maxProfit = po?.maxProfit ?? 0;
+  const maxLoss = po?.maxLoss ?? 0;
+  const netDebit = po?.netDebit ?? 0;
 
   const [hist, setHist] = useState<{ winRate: number | null; avgRet: number | null; n: number }>({ winRate: null, avgRet: null, n: 0 });
   useEffect(() => {
