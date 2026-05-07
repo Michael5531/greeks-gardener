@@ -278,8 +278,8 @@ function DTEStackedChart({
   data, xKey, exps, colors, refX,
 }: { data: any[]; xKey: string; exps: string[]; colors: Record<string, string>; refX: number | null }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
+    <ChartSizer>
+      {({ width, height }) => <BarChart width={width} height={height} data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis dataKey={xKey} type="category" interval="preserveStartEnd" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(Math.abs(v))} />
@@ -311,15 +311,15 @@ function DTEStackedChart({
             label={{ value: `Spot ${refX.toFixed(2)}`, position: "top", fill: "hsl(var(--foreground))", fontSize: 11, fontFamily: "JetBrains Mono" }}
           />
         )}
-      </BarChart>
-    </ResponsiveContainer>
+      </BarChart>}
+    </ChartSizer>
   );
 }
 
 function ExpiryLineChart({ data }: { data: any[] }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+    <ChartSizer>
+      {({ width, height }) => <LineChart width={width} height={height} data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis dataKey="exp" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis yAxisId="oi" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
@@ -333,8 +333,8 @@ function ExpiryLineChart({ data }: { data: any[] }) {
         <RLine yAxisId="oi" type="monotone" dataKey="putOI" name="Put OI" stroke="hsl(var(--bear))" strokeWidth={2} dot={{ r: 3 }} />
         <RLine yAxisId="vol" type="monotone" dataKey="callVol" name="Call Vol" stroke="hsl(var(--bull))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
         <RLine yAxisId="vol" type="monotone" dataKey="putVol" name="Put Vol" stroke="hsl(var(--bear))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
+      </LineChart>}
+    </ChartSizer>
   );
 }
 
