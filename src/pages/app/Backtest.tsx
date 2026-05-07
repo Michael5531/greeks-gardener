@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt, fmtPct } from "@/lib/optionUtils";
+import { STRATEGIES, getStrategy } from "@/lib/strategies";
+import StrategyCard from "@/components/StrategyCard";
 
 export default function Backtest() {
   const [ticker, setTicker] = useState("AAPL");
@@ -20,6 +22,8 @@ export default function Backtest() {
   const [result, setResult] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
 
+  const def = getStrategy(strategy);
+
   async function loadHistory() {
     const { data } = await supabase.from("backtests").select("*").order("created_at", { ascending: false }).limit(10);
     setHistory(data ?? []);
@@ -27,6 +31,10 @@ export default function Backtest() {
   useEffect(() => { loadHistory(); }, []);
 
   async function run() {
+    if (!def.engineSupported) {
+      toast.error("此策略暂不支持引擎回测，下方 Payoff 可视化可参考。");
+      return;
+    }
     setRunning(true);
     const { data, error } = await supabase.functions.invoke("run-backtest", {
       body: {
@@ -57,8 +65,9 @@ export default function Backtest() {
           <Select value={strategy} onValueChange={setStrategy}>
             <SelectTrigger className="font-mono"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="covered_call">Covered Call</SelectItem>
-              <SelectItem value="cash_secured_put">Cash-Secured Put</SelectItem>
+              {STRATEGIES.map(s => (
+                <SelectItem key={s.id} value={s.id}>{s.name}{!s.engineSupported ? " ·  payoff only" : ""}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </Field>
@@ -66,9 +75,13 @@ export default function Backtest() {
         <Field label="目标 |Δ|"><Input type="number" step="0.05" className="font-mono" value={delta} onChange={e => setDelta(+e.target.value)} /></Field>
         <Field label="假定 IV"><Input type="number" step="0.05" className="font-mono" value={iv} onChange={e => setIv(+e.target.value)} /></Field>
         <div className="md:col-span-7 flex justify-end">
-          <Button onClick={run} disabled={running} className="glow">{running ? "运行中…" : "运行回测"}</Button>
+          <Button onClick={run} disabled={running || !def.engineSupported} className="glow" title={!def.engineSupported ? "此策略暂不支持引擎回测" : ""}>
+            {running ? "运行中…" : def.engineSupported ? "运行回测" : "暂不支持回测"}
+          </Button>
         </div>
       </div>
+
+      <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
 
       {result && <ResultPanel r={result} />}
 

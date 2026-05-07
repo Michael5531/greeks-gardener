@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { runHistoricalFlow } from "@/lib/polygon";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import OptionPricer from "@/components/OptionPricer";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
@@ -51,6 +52,19 @@ export default function Flow() {
   // scatter data
   const scatterCalls = prints.filter(p => p.type === "call").map(p => ({ x: p.time, y: p.strike, z: p.premium, ...p }));
   const scatterPuts = prints.filter(p => p.type === "put").map(p => ({ x: p.time, y: p.strike, z: p.premium, ...p }));
+
+  // Call (positive) / Put (negative) bidirectional series sorted by time
+  const directional = prints
+    .slice()
+    .sort((a, b) => a.time - b.time)
+    .map((p, i) => ({
+      idx: i,
+      time: p.time,
+      label: new Date(p.time).toISOString().slice(5, 16).replace("T", " "),
+      callPremium: p.type === "call" ? p.premium : 0,
+      putPremium: p.type === "put" ? -p.premium : 0,
+      ...p,
+    }));
 
   // premium histogram
   const histogram = (() => {
@@ -124,6 +138,33 @@ export default function Flow() {
                   <Scatter name="Call" data={scatterCalls} fill="hsl(var(--bull))" />
                   <Scatter name="Put" data={scatterPuts} fill="hsl(var(--bear))" />
                 </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card/40 p-4">
+            <div className="text-sm font-semibold mb-2">
+              Call ↑ / Put ↓ 大单 Premium
+              <span className="text-xs text-muted-foreground ml-2">向上为 call，向下为 put · 单位 $</span>
+            </div>
+            <div className="h-[360px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={directional} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+                  <CartesianGrid stroke="hsl(var(--grid-line))" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} minTickGap={40} />
+                  <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+                  <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip
+                    contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                    formatter={(v: any, n: any, item: any) => {
+                      const p = item?.payload;
+                      const abs = Math.abs(v);
+                      return [`$${(abs / 1000).toFixed(0)}K · K=${p?.strike} · sz=${p?.size}`, n === "callPremium" ? "Call" : "Put"];
+                    }}
+                  />
+                  <Bar dataKey="callPremium" fill="hsl(var(--bull))" />
+                  <Bar dataKey="putPremium" fill="hsl(var(--bear))" />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -216,6 +257,8 @@ export default function Flow() {
           )}
         </>
       )}
+
+      <OptionPricer />
     </div>
   );
 }
