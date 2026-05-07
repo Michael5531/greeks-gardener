@@ -420,7 +420,7 @@ function Section({ title, subtitle, children, tall }: { title: string; subtitle?
         <h3 className="text-sm font-semibold">{title}</h3>
         {subtitle && <span className="text-[11px] text-muted-foreground">{subtitle}</span>}
       </div>
-      <div className={tall ? "h-[460px]" : "h-72"}>{children}</div>
+      <div className={tall ? "h-[760px]" : "h-96"}>{children}</div>
     </div>
   );
 }
