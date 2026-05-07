@@ -255,21 +255,37 @@ export default function Greeks3D() {
         </div>
       )}
 
-      <div className="rounded-lg border border-border bg-card/30 h-[640px] relative overflow-hidden">
+      <div className="rounded-lg border border-border bg-card/30 h-[560px] relative overflow-hidden p-4">
         {!ticker && <div className="absolute inset-0 grid place-items-center text-muted-foreground">请先搜索标的</div>}
         {loading && <div className="absolute top-3 left-3 text-xs text-muted-foreground font-mono">加载期权链…</div>}
         {error && <div className="absolute top-3 left-3 text-xs text-destructive font-mono">{error}</div>}
         {ticker && ready && (
-          <Canvas camera={{ position: [11, 9, 11], fov: 45 }}>
-            <ambientLight intensity={0.5} />
-            <pointLight position={[10, 12, 10]} intensity={1.1} />
-            <pointLight position={[-10, 6, -10]} intensity={0.4} color="#88aaff" />
-            <Surface strikes={strikes} exps={exps} grid={grid} />
-            <OrbitControls enableDamping />
-          </Canvas>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={ivCurve} margin={{ top: 12, right: 16, left: 0, bottom: 24 }}>
+              <CartesianGrid stroke="hsl(var(--grid-line))" />
+              <XAxis dataKey="strike" type="number" domain={["dataMin", "dataMax"]}
+                tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis tickFormatter={v => `${v}%`}
+                tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+              <Tooltip
+                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                formatter={(v: any, n: any) => [v != null ? `${v}%` : "—", n]}
+                labelFormatter={(l: any) => `Strike ${l}`}
+              />
+              <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} />
+              {underlyingPrice != null && (
+                <ReferenceLine x={underlyingPrice} stroke="hsl(var(--foreground))" strokeDasharray="4 4"
+                  label={{ value: `Spot ${underlyingPrice.toFixed(2)}`, fontSize: 10, fill: "hsl(var(--foreground))" }} />
+              )}
+              {exps.map(e => (
+                <RLine key={e} type="monotone" dataKey={e} name={e} stroke={expColors[e] ?? "hsl(var(--primary))"}
+                  strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
         )}
         {ticker && !ready && !loading && (
-          <div className="absolute inset-0 grid place-items-center text-muted-foreground text-sm">数据不足以绘制曲面</div>
+          <div className="absolute inset-0 grid place-items-center text-muted-foreground text-sm">数据不足以绘制曲线</div>
         )}
         <div className="absolute top-3 right-3 text-[10px] font-mono text-muted-foreground bg-card/70 backdrop-blur border border-border rounded px-2 py-1">
           {strikes.length} strikes · {exps.length} expiries · {total} contracts
