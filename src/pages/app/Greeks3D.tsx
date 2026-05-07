@@ -145,8 +145,8 @@ export default function Greeks3D() {
     if (!missing.length) return;
     let cancelled = false;
     Promise.all(missing.map(async e => {
-      try { const r = await getOptionsChain(ticker, e); return [e, r] as const; }
-      catch { return [e, []] as const; }
+      try { const r = await getOptionsChain(ticker, e); return [e, r as any[]] as const; }
+      catch { return [e, [] as any[]] as const; }
     })).then(results => {
       if (cancelled) return;
       setExtraData(prev => {
