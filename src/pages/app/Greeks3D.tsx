@@ -6,7 +6,7 @@ import * as THREE from "three";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { getOptionsChain } from "@/lib/polygon";
-import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt } from "@/lib/optionUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -381,16 +381,12 @@ export default function Greeks3D() {
             <DTEStackedChart data={strikePivotOI} xKey="strike" exps={[...selectedExps].sort()} colors={expColors} refX={underlyingPrice} />
           </Section>
 
-          <Section title="未平仓量 OI · 按到期日" subtitle="Call vs Put 堆叠">
-            <StackedChart data={byExp} xKey="exp" aKey="callOI" bKey="putOI" />
-          </Section>
-
           <Section title="成交量 Volume · 按行权价" subtitle="Call 在上 / Put 在下 · 不同到期日叠加" tall>
             <DTEStackedChart data={strikePivotVol} xKey="strike" exps={[...selectedExps].sort()} colors={expColors} refX={underlyingPrice} />
           </Section>
 
-          <Section title="成交量 Volume · 按到期日" subtitle="Call vs Put 堆叠">
-            <StackedChart data={byExp} xKey="exp" aKey="callVol" bKey="putVol" />
+          <Section title="OI & Volume · 按到期日" subtitle="Call / Put 的 OI 与成交量随到期日变化">
+            <ExpiryLineChart data={byExp} />
           </Section>
         </>
       )}
@@ -449,9 +445,9 @@ function DTEStackedChart({
 }: { data: any[]; xKey: string; exps: string[]; colors: Record<string, string>; refX: number | null }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap={1}>
+      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
-        <XAxis dataKey={xKey} type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+        <XAxis dataKey={xKey} type="category" interval="preserveStartEnd" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(Math.abs(v))} />
         <ReferenceLine y={0} stroke="hsl(var(--border))" />
         <Tooltip
@@ -467,10 +463,10 @@ function DTEStackedChart({
           formatter={(v: string) => v.replace(/__[cp]$/, "")}
         />
         {exps.map(e => (
-          <Bar key={`${e}-c`} dataKey={`${e}__c`} stackId="dte" fill={colors[e]} name={`${e}__c`} maxBarSize={28} />
+          <Bar key={`${e}-c`} dataKey={`${e}__c`} stackId="dte" fill={colors[e]} name={`${e}__c`} />
         ))}
         {exps.map(e => (
-          <Bar key={`${e}-p`} dataKey={`${e}__p`} stackId="dte" fill={colors[e]} fillOpacity={0.55} name={`${e}__p`} maxBarSize={28} legendType="none" />
+          <Bar key={`${e}-p`} dataKey={`${e}__p`} stackId="dte" fill={colors[e]} fillOpacity={0.55} name={`${e}__p`} legendType="none" />
         ))}
         {refX != null && (
           <ReferenceLine
@@ -482,6 +478,28 @@ function DTEStackedChart({
           />
         )}
       </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ExpiryLineChart({ data }: { data: any[] }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+        <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
+        <XAxis dataKey="exp" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+        <YAxis yAxisId="oi" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
+        <YAxis yAxisId="vol" orientation="right" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
+        <Tooltip
+          contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}
+          formatter={(v: number, name: string) => [fmtK(v), name]}
+        />
+        <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} />
+        <Line yAxisId="oi" type="monotone" dataKey="callOI" name="Call OI" stroke="hsl(var(--bull))" strokeWidth={2} dot={{ r: 3 }} />
+        <Line yAxisId="oi" type="monotone" dataKey="putOI" name="Put OI" stroke="hsl(var(--bear))" strokeWidth={2} dot={{ r: 3 }} />
+        <Line yAxisId="vol" type="monotone" dataKey="callVol" name="Call Vol" stroke="hsl(var(--bull))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+        <Line yAxisId="vol" type="monotone" dataKey="putVol" name="Put Vol" stroke="hsl(var(--bear))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+      </LineChart>
     </ResponsiveContainer>
   );
 }
