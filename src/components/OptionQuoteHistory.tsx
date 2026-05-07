@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
+import ChartSizer from "@/components/charts/ChartSizer";
 import { getOptionQuotes } from "@/lib/polygon";
 import { fmt } from "@/lib/optionUtils";
 
@@ -115,8 +116,9 @@ export default function OptionQuoteHistory({ open, onOpenChange, optionTicker, l
             <div className="grid h-full place-items-center text-xs text-muted-foreground">该日无报价数据</div>
           )}
           {!error && chartData.length > 0 && (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+            <ChartSizer>
+              {({ width, height }) => (
+              <AreaChart width={width} height={height} data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="askFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="hsl(var(--bear))" stopOpacity={0.3} />
@@ -148,7 +150,8 @@ export default function OptionQuoteHistory({ open, onOpenChange, optionTicker, l
                 <Area type="monotone" dataKey="bid" stroke="hsl(var(--bull))" fill="url(#bidFill)" dot={false} isAnimationActive={false} />
                 <Area type="monotone" dataKey="mid" stroke="hsl(var(--primary))" fill="none" dot={false} isAnimationActive={false} />
               </AreaChart>
-            </ResponsiveContainer>
+              )}
+            </ChartSizer>
           )}
         </div>
       </DialogContent>

@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { runHistoricalFlow } from "@/lib/polygon";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import ChartSizer from "@/components/charts/ChartSizer";
 import OptionPricer from "@/components/OptionPricer";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
@@ -218,8 +219,9 @@ export default function Flow() {
           <div className="rounded-lg border border-border bg-card/40 p-4">
             <div className="text-sm font-semibold mb-2">时间 × Strike 散点图 <span className="text-xs text-muted-foreground ml-2">大小=premium · 绿=call 红=put</span></div>
             <div className="h-[420px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+              <ChartSizer>
+                {({ width, height }) => (
+                <ScatterChart width={width} height={height} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
                   <CartesianGrid stroke="hsl(var(--grid-line))" />
                   <XAxis type="number" dataKey="x" domain={["auto", "auto"]} tickFormatter={v => new Date(v).toISOString().slice(5, 16).replace("T", " ")}
                     tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
@@ -241,7 +243,8 @@ export default function Flow() {
                       label={{ value: `Spot ${(spot ?? result.underlying_price).toFixed(2)}`, fill: "hsl(var(--primary))", fontSize: 10, position: "right" }} />
                   )}
                 </ScatterChart>
-              </ResponsiveContainer>
+                )}
+              </ChartSizer>
             </div>
           </div>
 
@@ -251,8 +254,9 @@ export default function Flow() {
               <span className="text-xs text-muted-foreground ml-2">Call 在上 / Put 在下 · 不同到期日叠加</span>
             </div>
             <div className="h-[420px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={strikePremium} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
+              <ChartSizer>
+                {({ width, height }) => (
+                <BarChart width={width} height={height} data={strikePremium} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap="8%">
                   <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
                   <XAxis dataKey="strike" type="category" interval="preserveStartEnd"
                     tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
@@ -279,7 +283,8 @@ export default function Flow() {
                       label={{ value: `Spot ${(spot ?? result.underlying_price).toFixed(2)}`, fill: "hsl(var(--primary))", fontSize: 10, position: "top" }} />
                   )}
                 </BarChart>
-              </ResponsiveContainer>
+                )}
+              </ChartSizer>
             </div>
           </div>
 
@@ -287,8 +292,9 @@ export default function Flow() {
             <div className="rounded-lg border border-border bg-card/40 p-4">
               <div className="text-sm font-semibold mb-2">Top 合约（按 premium）</div>
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={contracts} layout="vertical" margin={{ top: 4, right: 12, left: 80, bottom: 8 }}>
+                <ChartSizer>
+                  {({ width, height }) => (
+                  <BarChart width={width} height={height} data={contracts} layout="vertical" margin={{ top: 4, right: 12, left: 80, bottom: 8 }}>
                     <CartesianGrid stroke="hsl(var(--grid-line))" />
                     <XAxis type="number" tickFormatter={v => `$${(v/1e6).toFixed(1)}M`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
                     <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} width={140} />
@@ -305,21 +311,24 @@ export default function Flow() {
                       ))}
                     </Bar>
                   </BarChart>
-                </ResponsiveContainer>
+                  )}
+                </ChartSizer>
               </div>
             </div>
             <div className="rounded-lg border border-border bg-card/40 p-4">
               <div className="text-sm font-semibold mb-2">Premium 直方图</div>
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={histogram} margin={{ top: 4, right: 12, left: 0, bottom: 8 }}>
+                <ChartSizer>
+                  {({ width, height }) => (
+                  <BarChart width={width} height={height} data={histogram} margin={{ top: 4, right: 12, left: 0, bottom: 8 }}>
                     <CartesianGrid stroke="hsl(var(--grid-line))" />
                     <XAxis dataKey="bin" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
                     <YAxis tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
                     <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} />
                     <Bar dataKey="count" fill="hsl(var(--accent))" />
                   </BarChart>
-                </ResponsiveContainer>
+                  )}
+                </ChartSizer>
               </div>
             </div>
           </div>

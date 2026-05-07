@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
+import { Area, AreaChart, YAxis } from "recharts";
+import ChartSizer from "@/components/charts/ChartSizer";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { TrendingDown, TrendingUp, X } from "lucide-react";
@@ -60,8 +61,9 @@ export default function WatchCard({
       <div className="mt-3 flex items-end gap-2">
         <div className="h-12 flex-1 min-w-0">
           {series.length > 1 && (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+            <ChartSizer>
+              {({ width, height }) => (
+              <AreaChart width={width} height={height} data={series} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id={`wc-${ticker}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={`hsl(var(--${ytdUp ? "bull" : "bear"}))`} stopOpacity={0.45} />
@@ -71,7 +73,8 @@ export default function WatchCard({
                 <YAxis hide domain={["dataMin", "dataMax"]} />
                 <Area dataKey="c" stroke={`hsl(var(--${ytdUp ? "bull" : "bear"}))`} fill={`url(#wc-${ticker})`} strokeWidth={1.2} dot={false} type="monotone" isAnimationActive={false} />
               </AreaChart>
-            </ResponsiveContainer>
+              )}
+            </ChartSizer>
           )}
         </div>
         <div className="text-right">
