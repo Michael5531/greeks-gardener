@@ -464,10 +464,10 @@ function DTEStackedChart({
         />
         <Legend
           wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }}
-          payload={exps.map(e => ({ value: e, type: "square", id: e, color: colors[e] }))}
+          formatter={(v: string) => v.replace(/__[cp]$/, "")}
         />
         {exps.map(e => (
-          <Bar key={`${e}-c`} dataKey={`${e}__c`} stackId="dte" fill={colors[e]} name={`${e}__c`} maxBarSize={28} legendType="none" />
+          <Bar key={`${e}-c`} dataKey={`${e}__c`} stackId="dte" fill={colors[e]} name={`${e}__c`} maxBarSize={28} />
         ))}
         {exps.map(e => (
           <Bar key={`${e}-p`} dataKey={`${e}__p`} stackId="dte" fill={colors[e]} fillOpacity={0.55} name={`${e}__p`} maxBarSize={28} legendType="none" />
