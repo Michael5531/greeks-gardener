@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { X, Plus } from "lucide-react";
+import { useLiveQuote } from "@/hooks/useLiveQuote";
 
 function Axes({ size = 5 }: { size?: number }) {
   const L = size;
@@ -109,6 +110,7 @@ export default function Greeks3D() {
   const [params, setParams] = useSearchParams();
   const ticker = params.get("ticker") ?? "";
   const { data: baseData, loading, error, expirations } = useOptionsChain(ticker || null);
+  const { quote: liveQuote } = useLiveQuote(ticker || null, 4000);
 
   // Selected expirations for charts (defaults to closest to +7/+14/+21d)
   const [selectedExps, setSelectedExps] = useState<string[]>([]);
@@ -236,12 +238,13 @@ export default function Greeks3D() {
 
   // underlying price (from any contract that carries it)
   const underlyingPrice = useMemo(() => {
+    if (liveQuote?.price != null) return liveQuote.price;
     for (const d of data) {
       const p = d.underlying_asset?.price;
       if (p != null) return p as number;
     }
     return null;
-  }, [data]);
+  }, [data, liveQuote?.price]);
 
   // Per-DTE pivot: rows = strike, one numeric column per selected expiration
   const expColors = useMemo(() => {
