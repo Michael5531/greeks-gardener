@@ -40,13 +40,30 @@ export default function HeroTicker({ ticker }: { ticker: string }) {
 
   const liveUp = (quote?.change ?? 0) >= 0;
 
+  const sessionLabel = { pre: t.market.pre, regular: t.market.regular, after: t.market.after, closed: t.market.closed }[session];
+  const sessionTone = {
+    pre: "bg-accent/15 text-accent border-accent/30",
+    regular: "bg-bull/15 text-bull border-bull/30",
+    after: "bg-primary/15 text-primary border-primary/30",
+    closed: "bg-muted text-muted-foreground border-border",
+  }[session];
+
+  const fallbackPrice = intraLast ?? null;
+  const displayPrice = quote?.price ?? fallbackPrice;
+
   return (
     <div className="rounded-lg border border-border bg-card/40 p-4 grid md:grid-cols-[auto_1fr_auto] gap-4 items-center">
       <div>
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{ticker}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{ticker}</div>
+          <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-mono uppercase tracking-wider", sessionTone)}>
+            <span className={cn("h-1 w-1 rounded-full bg-current", session === "regular" && "animate-pulse")} />
+            {sessionLabel}
+          </span>
+        </div>
         <div className="flex items-baseline gap-2 mt-0.5">
           <div className="text-3xl font-mono font-semibold">
-            {quote?.price != null ? `$${quote.price.toFixed(2)}` : "—"}
+            {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
           </div>
           {quote?.change != null && (
             <div className={cn("text-xs font-mono flex items-center gap-1", liveUp ? "text-bull" : "text-bear")}>
