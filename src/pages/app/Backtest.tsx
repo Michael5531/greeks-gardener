@@ -6,7 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt, fmtPct } from "@/lib/optionUtils";
 import { STRATEGIES, getStrategy } from "@/lib/strategies";
 import StrategyCard from "@/components/StrategyCard";
@@ -20,6 +20,7 @@ export default function Backtest() {
   const [dte, setDte] = useState(30);
   const [delta, setDelta] = useState(0.3);
   const [iv, setIv] = useState(0.30);
+  const [ivMode, setIvMode] = useState<"constant" | "historical_atm">("constant");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -77,7 +78,7 @@ export default function Backtest() {
       body: {
         ticker: ticker.toUpperCase(), start_date: start, end_date: end,
         strategy_type: strategy, dte: Number(dte), delta_target: Number(delta), iv: Number(iv),
-        profit_take: 0.5, stop_loss: 2,
+        profit_take: 0.5, stop_loss: 2, iv_mode: ivMode,
       },
     });
     setRunning(false);
@@ -120,7 +121,20 @@ export default function Backtest() {
             </Button>
           </div>
         </Field>
-        <div className="md:col-span-7 flex justify-end">
+        <Field label="IV 模式">
+          <Select value={ivMode} onValueChange={(v: any) => setIvMode(v)}>
+            <SelectTrigger className="font-mono text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="constant">固定 IV</SelectItem>
+              <SelectItem value="historical_atm">历史 ATM 反解（慢）</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <div className="md:col-span-7 flex items-center justify-between">
+          {ivMode === "historical_atm" && (
+            <span className="text-[11px] text-muted-foreground">将逐日重取 ATM 期权价格反解 IV，回测会显著变慢。</span>
+          )}
+          <div className="ml-auto" />
           <Button onClick={run} disabled={running || !def.engineSupported} className="glow" title={!def.engineSupported ? "此策略暂不支持引擎回测" : ""}>
             {running ? "运行中…" : def.engineSupported ? "运行回测" : "暂不支持回测"}
           </Button>
@@ -128,6 +142,8 @@ export default function Backtest() {
       </div>
 
       <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
+
+      <MiniGEX ticker={ticker} spot={spot} />
 
       {result && <ResultPanel r={result} />}
 
@@ -162,6 +178,87 @@ export default function Backtest() {
 
 function Field({ label, children }: any) {
   return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+// Lightweight GEX snapshot panel for reference. Computes Net GEX per strike from
+// the option chain. Cached in-memory by ticker for 5 minutes.
+const _gexCache = new Map<string, { ts: number; rows: any[]; total: number; flip: number | null; spot: number | null }>();
+function MiniGEX({ ticker, spot }: { ticker: string; spot: number | null }) {
+  const [state, setState] = useState<{ rows: any[]; total: number; flip: number | null; loading: boolean; error: string | null }>({
+    rows: [], total: 0, flip: null, loading: false, error: null,
+  });
+  useEffect(() => {
+    if (!ticker) return;
+    const cached = _gexCache.get(ticker);
+    if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
+      setState({ rows: cached.rows, total: cached.total, flip: cached.flip, loading: false, error: null });
+      return;
+    }
+    let cancel = false;
+    setState(s => ({ ...s, loading: true, error: null }));
+    getOptionsChain(ticker).then((chain: any[]) => {
+      if (cancel) return;
+      const usedSpot = spot ?? chain.find((c: any) => c.underlying_asset?.price)?.underlying_asset?.price ?? null;
+      const map = new Map<number, number>();
+      for (const c of chain) {
+        const k = c.details?.strike_price;
+        const oi = c.open_interest ?? 0;
+        const g = c.greeks?.gamma;
+        if (k == null || !oi || g == null || usedSpot == null) continue;
+        const isCall = c.details?.contract_type === "call";
+        const val = oi * g * 100 * usedSpot * usedSpot * 0.01;
+        map.set(k, (map.get(k) ?? 0) + (isCall ? val : -val));
+      }
+      let rows = Array.from(map.entries()).map(([strike, gex]) => ({ strike, gex })).sort((a, b) => a.strike - b.strike);
+      if (usedSpot) rows = rows.filter(r => r.strike > usedSpot * 0.85 && r.strike < usedSpot * 1.15);
+      let cum = 0; let flip: number | null = null;
+      for (let i = 0; i < rows.length; i++) {
+        const prev = cum; cum += rows[i].gex;
+        if (i > 0 && prev < 0 && cum >= 0) { flip = rows[i].strike; break; }
+      }
+      const total = rows.reduce((a, b) => a + b.gex, 0);
+      _gexCache.set(ticker, { ts: Date.now(), rows, total, flip, spot: usedSpot });
+      setState({ rows, total, flip, loading: false, error: null });
+    }).catch(e => { if (!cancel) setState({ rows: [], total: 0, flip: null, loading: false, error: e?.message ?? "GEX 加载失败" }); });
+    return () => { cancel = true; };
+  }, [ticker, spot]);
+
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="text-sm font-semibold">当前 GEX 快照 · 参考</h3>
+        <span className="text-[11px] text-muted-foreground">仅供参考，不参与回测计算 · 5min 缓存</span>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3 mb-3">
+        <Stat label="Total Net GEX" value={Number.isFinite(state.total) && state.total !== 0 ? (state.total / 1e6).toFixed(2) + "M" : "—"} positive={state.total >= 0} />
+        <Stat label="Gamma Flip" value={state.flip != null ? state.flip.toFixed(2) : "—"} />
+        <Stat label="Spot" value={spot != null ? spot.toFixed(2) : "—"} />
+      </div>
+      <div className="h-60">
+        {state.loading && <div className="h-full grid place-items-center text-xs text-muted-foreground">加载中…</div>}
+        {state.error && <div className="h-full grid place-items-center text-xs text-destructive">{state.error}</div>}
+        {!state.loading && !state.error && state.rows.length === 0 && <div className="h-full grid place-items-center text-xs text-muted-foreground">暂无数据</div>}
+        {!state.loading && state.rows.length > 0 && (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={state.rows} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
+              <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
+              <XAxis dataKey="strike" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => (v / 1e6).toFixed(1) + "M"} />
+              <Tooltip
+                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 11 }}
+                formatter={(v: number) => [(v / 1e6).toFixed(2) + "M", "Net GEX"]}
+                labelFormatter={(l: any) => `Strike ${l}`}
+              />
+              <ReferenceLine y={0} stroke="hsl(var(--border))" />
+              {spot != null && <ReferenceLine x={spot} stroke="hsl(var(--foreground))" strokeDasharray="4 4" label={{ value: `Spot ${spot.toFixed(0)}`, fontSize: 10, fill: "hsl(var(--foreground))" }} />}
+              {state.flip != null && <ReferenceLine x={state.flip} stroke="hsl(var(--primary))" strokeDasharray="2 4" label={{ value: `Flip ${state.flip.toFixed(0)}`, fontSize: 10, fill: "hsl(var(--primary))" }} />}
+              <Bar dataKey="gex" fill="hsl(var(--primary))" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function ResultPanel({ r }: { r: any }) {

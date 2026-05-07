@@ -19,7 +19,12 @@ export default function Greeks3D() {
 
   // Selected expirations for charts (defaults to closest to +7/+14/+21d)
   const [selectedExps, setSelectedExps] = useState<string[]>([]);
-  const [extraData, setExtraData] = useState<Record<string, any[]>>({});
+  // Cache scoped per-ticker so switching symbols never leaks stale contracts
+  const [extraDataAll, setExtraDataAll] = useState<Record<string, Record<string, any[]>>>({});
+  const extraData = (ticker && extraDataAll[ticker]) || {};
+
+  // Reset selected expirations when ticker changes (different chains, different dates)
+  useEffect(() => { setSelectedExps([]); }, [ticker]);
 
   const pickClosestExp = (days: number, list: string[]): string | undefined => {
     if (!list.length) return undefined;
@@ -44,30 +49,36 @@ export default function Greeks3D() {
     setSelectedExps(Array.from(new Set(defaults)));
   }, [expirations]);
 
-  // Fetch chain for any selected expiration that we don't have yet
+  // Fetch chain for any selected expiration that we don't have yet (per-ticker cache)
   useEffect(() => {
     if (!ticker) return;
-    const have = new Set(baseData.map(d => d.details?.expiration_date).filter(Boolean));
+    const baseForThisTicker = baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`));
+    const have = new Set(baseForThisTicker.map(d => d.details?.expiration_date).filter(Boolean));
     const missing = selectedExps.filter(e => !have.has(e) && !extraData[e]);
     if (!missing.length) return;
     let cancelled = false;
+    const tk = ticker;
     Promise.all(missing.map(async e => {
-      try { const r = await getOptionsChain(ticker, e); return [e, r as any[]] as const; }
+      try { const r = await getOptionsChain(tk, e); return [e, r as any[]] as const; }
       catch { return [e, [] as any[]] as const; }
     })).then(results => {
       if (cancelled) return;
-      setExtraData(prev => {
-        const next = { ...prev };
-        for (const [e, r] of results) next[e] = r;
-        return next;
+      setExtraDataAll(prev => {
+        const bucket = { ...(prev[tk] ?? {}) };
+        for (const [e, r] of results) bucket[e] = r;
+        return { ...prev, [tk]: bucket };
       });
     });
     return () => { cancelled = true; };
-  }, [ticker, selectedExps, baseData, extraData]);
+  }, [ticker, selectedExps, baseData]);
 
   // Merge: base data + extra fetched data, then filter to selectedExps for charts
   const data = useMemo(() => {
-    if (!selectedExps.length) return baseData;
+    // Defensive: only keep rows whose option ticker matches the selected underlying
+    const baseFiltered = ticker
+      ? baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`))
+      : baseData;
+    if (!selectedExps.length) return baseFiltered;
     const seen = new Set<string>();
     const out: any[] = [];
     const push = (d: any) => {
@@ -75,12 +86,12 @@ export default function Greeks3D() {
       if (seen.has(k)) return;
       seen.add(k); out.push(d);
     };
-    for (const d of baseData) {
+    for (const d of baseFiltered) {
       if (selectedExps.includes(d.details?.expiration_date)) push(d);
     }
     for (const e of selectedExps) for (const d of (extraData[e] ?? [])) push(d);
     return out;
-  }, [baseData, extraData, selectedExps]);
+  }, [baseData, extraData, selectedExps, ticker]);
 
   // Build IV smile data: rows = strike, columns = expiration IV (avg of call & put)
   const { strikes, exps, ivCurve, total } = useMemo(() => {
@@ -294,6 +305,10 @@ export default function Greeks3D() {
 
       {ticker && data.length > 0 && (
         <>
+          <Section title="IV Surface · DTE × Strike" subtitle="Heatmap · 颜色 = 隐含波动率 (蓝低 红高)">
+            <IVSurfaceHeatmap ivCurve={ivCurve} strikes={strikes} exps={exps} spot={underlyingPrice} />
+          </Section>
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat label="Call OI" value={fmtK(totals.callOI)} tone="bull" />
             <Stat label="Put OI" value={fmtK(totals.putOI)} tone="bear" />
@@ -429,5 +444,82 @@ function ExpiryLineChart({ data }: { data: any[] }) {
         <RLine yAxisId="vol" type="monotone" dataKey="putVol" name="Put Vol" stroke="hsl(var(--bear))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
       </LineChart>
     </ResponsiveContainer>
+  );
+}
+
+function IVSurfaceHeatmap({
+  ivCurve, strikes, exps, spot,
+}: { ivCurve: any[]; strikes: number[]; exps: string[]; spot: number | null }) {
+  // Compute color scale from observed IVs (in %)
+  const vals: number[] = [];
+  for (const row of ivCurve) for (const e of exps) { const v = row[e]; if (typeof v === "number") vals.push(v); }
+  const lo = vals.length ? Math.min(...vals) : 0;
+  const hi = vals.length ? Math.max(...vals) : 1;
+  const span = Math.max(0.001, hi - lo);
+  const color = (v: number | null | undefined) => {
+    if (typeof v !== "number") return "hsl(var(--muted) / 0.15)";
+    const t = (v - lo) / span; // 0..1
+    // Blue (low) → white → Red (high) via HSL
+    const hue = (1 - t) * 220; // 220 blue → 0 red
+    const light = 50 + (1 - Math.abs(0.5 - t) * 2) * 15; // brighter near mid
+    return `hsl(${hue} 70% ${light}%)`;
+  };
+  // Find spot column index for the dashed marker
+  let spotIdx = -1;
+  if (spot != null && strikes.length) {
+    let best = Infinity;
+    strikes.forEach((s, i) => { const d = Math.abs(s - spot); if (d < best) { best = d; spotIdx = i; } });
+  }
+  if (!strikes.length || !exps.length) {
+    return <div className="h-full grid place-items-center text-muted-foreground text-sm">数据不足</div>;
+  }
+  // Y axis: rows = expirations (top = nearest)
+  const sortedExps = [...exps].sort();
+  const ivByExp: Record<string, Record<number, number | null>> = {};
+  for (const e of sortedExps) ivByExp[e] = {};
+  for (const row of ivCurve) for (const e of sortedExps) ivByExp[e][row.strike] = row[e] ?? null;
+
+  return (
+    <div className="h-full w-full overflow-auto">
+      <div className="inline-block min-w-full">
+        <div className="flex">
+          <div className="w-20 shrink-0" />
+          <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${strikes.length}, minmax(28px, 1fr))` }}>
+            {strikes.map((s, i) => (
+              <div key={s} className={`text-[9px] font-mono text-center text-muted-foreground py-1 ${i === spotIdx ? "text-foreground font-bold" : ""}`}>
+                {s}
+              </div>
+            ))}
+          </div>
+        </div>
+        {sortedExps.map(e => (
+          <div key={e} className="flex">
+            <div className="w-20 shrink-0 text-[10px] font-mono text-muted-foreground flex items-center pr-2 justify-end">{e}</div>
+            <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${strikes.length}, minmax(28px, 1fr))` }}>
+              {strikes.map((s, i) => {
+                const v = ivByExp[e][s];
+                return (
+                  <div
+                    key={s}
+                    className={`h-7 flex items-center justify-center text-[9px] font-mono ${i === spotIdx ? "ring-1 ring-foreground/60" : ""}`}
+                    style={{ background: color(v), color: typeof v === "number" ? "hsl(0 0% 10%)" : "hsl(var(--muted-foreground))" }}
+                    title={`Strike ${s} · ${e} · IV ${typeof v === "number" ? v.toFixed(1) + "%" : "—"}`}
+                  >
+                    {typeof v === "number" ? v.toFixed(0) : "·"}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 pl-20 pt-2 text-[10px] font-mono text-muted-foreground">
+          <span>IV%:</span>
+          <span>{lo.toFixed(1)}</span>
+          <div className="h-2 w-40 rounded" style={{ background: "linear-gradient(to right, hsl(220 70% 50%), hsl(110 70% 60%), hsl(0 70% 50%))" }} />
+          <span>{hi.toFixed(1)}</span>
+          {spot != null && <span className="ml-3">Spot ≈ {spot.toFixed(2)} (highlighted column)</span>}
+        </div>
+      </div>
+    </div>
   );
 }
