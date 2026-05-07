@@ -31,6 +31,9 @@ Deno.serve(async (req) => {
     const snapRes = await fetch(snapUrl);
     const snapData = await snapRes.json();
     const all: any[] = Array.isArray(snapData.results) ? snapData.results : [];
+    // current underlying spot (Polygon embeds it on each contract snapshot)
+    const underlyingPrice: number | null =
+      all.find((c: any) => c?.underlying_asset?.price != null)?.underlying_asset?.price ?? null;
     const ranked = all
       .map((c: any) => ({ c, score: (c.day?.volume ?? 0) + (c.open_interest ?? 0) }))
       .sort((a, b) => b.score - a.score)
@@ -135,6 +138,7 @@ Deno.serve(async (req) => {
     contractStats.sort((a, b) => b.premium - a.premium);
     return json({
       ticker, from_date: fromDate, to_date: toDate, scanned: ranked.length,
+      underlying_price: underlyingPrice,
       contracts: contractStats.slice(0, top),
       large_prints: allPrints.slice(0, 200),
       sweeps: sweeps.slice(0, 100),

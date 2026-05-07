@@ -12,6 +12,7 @@ import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, ReferenceLine, Res
 import OptionPricer from "@/components/OptionPricer";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
+import { useLiveQuote } from "@/hooks/useLiveQuote";
 
 function isCallTicker(t?: string) {
   if (!t) return false;
@@ -26,6 +27,8 @@ const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().sli
 export default function Flow() {
   const [ticker, setTicker] = useSelectedTicker();
   const { data: chainData, expirations } = useOptionsChain(ticker || null);
+  const { quote: liveQuote } = useLiveQuote(ticker || null, 5000);
+  const spot = liveQuote?.price ?? null;
   const strikeOptions = useMemo(() => {
     const s = new Set<number>();
     for (const d of chainData) {
@@ -205,7 +208,11 @@ export default function Flow() {
             <Stat label="扫描合约" value={String(result.scanned)} />
             <Stat label="大单总数" value={String(result.total_prints)} />
             <Stat label="Sweep 候选" value={String(result.total_sweeps)} />
-            <Stat label="时间范围" value={`${result.from_date} → ${result.to_date}`} mono />
+            <Stat
+              label={`${ticker} 实时现价`}
+              value={spot != null ? `$${spot.toFixed(2)}` : (result.underlying_price != null ? `$${result.underlying_price.toFixed(2)}` : "—")}
+              mono
+            />
           </div>
 
           <div className="rounded-lg border border-border bg-card/40 p-4">
@@ -229,6 +236,10 @@ export default function Flow() {
                   />
                   <Scatter name="Call" data={scatterCalls} fill="hsl(var(--bull))" />
                   <Scatter name="Put" data={scatterPuts} fill="hsl(var(--bear))" />
+                  {(spot ?? result.underlying_price) != null && (
+                    <ReferenceLine y={spot ?? result.underlying_price} stroke="hsl(var(--primary))" strokeDasharray="4 3"
+                      label={{ value: `Spot ${(spot ?? result.underlying_price).toFixed(2)}`, fill: "hsl(var(--primary))", fontSize: 10, position: "right" }} />
+                  )}
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
@@ -263,6 +274,10 @@ export default function Flow() {
                   {expSet.map(e => (
                     <Bar key={`${e}-p`} dataKey={`${e}__p`} stackId="x" fill={expColorMap[e]} fillOpacity={0.55} name={`${e}__p`} legendType="none" />
                   ))}
+                  {(spot ?? result.underlying_price) != null && (
+                    <ReferenceLine x={(spot ?? result.underlying_price)} stroke="hsl(var(--primary))" strokeDasharray="4 3"
+                      label={{ value: `Spot ${(spot ?? result.underlying_price).toFixed(2)}`, fill: "hsl(var(--primary))", fontSize: 10, position: "top" }} />
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
