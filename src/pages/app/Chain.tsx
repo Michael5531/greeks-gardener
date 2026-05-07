@@ -9,9 +9,12 @@ export default function Chain() {
   const [params, setParams] = useSearchParams();
   const ticker = params.get("ticker") ?? "";
   const [exp, setExp] = useState<string | undefined>();
-  const { data, loading, error, expirations } = useOptionsChain(ticker || null);
+  const activeExp = exp && expirations.includes(exp) ? exp : undefined;
+  const { data, loading, error, expirations } = useOptionsChain(ticker || null, activeExp);
 
-  useEffect(() => { if (!exp && expirations.length) setExp(expirations[0]); }, [expirations, exp]);
+  useEffect(() => {
+    if (expirations.length && (!exp || !expirations.includes(exp))) setExp(expirations[0]);
+  }, [expirations, exp]);
 
   const filtered = useMemo(() => exp ? data.filter(d => d.details?.expiration_date === exp) : data, [data, exp]);
   const calls = filtered.filter(d => d.details?.contract_type === "call").sort((a,b) => a.details.strike_price - b.details.strike_price);
