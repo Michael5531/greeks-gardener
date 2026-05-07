@@ -67,6 +67,33 @@ export type Database = {
           },
         ]
       }
+      compute_cache: {
+        Row: {
+          cache_key: string
+          computed_at: string
+          fresh_until: string
+          id: string
+          kind: string
+          payload: Json
+        }
+        Insert: {
+          cache_key: string
+          computed_at?: string
+          fresh_until: string
+          id?: string
+          kind: string
+          payload: Json
+        }
+        Update: {
+          cache_key?: string
+          computed_at?: string
+          fresh_until?: string
+          id?: string
+          kind?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string

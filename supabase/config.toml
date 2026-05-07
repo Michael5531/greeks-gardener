@@ -13,5 +13,20 @@ project_id = "hkohoumgswnyllcuragv"
     verify_jwt = false
   [functions.process-email-queue]
     verify_jwt = true
+
+[functions.compute-gex]
+verify_jwt = false
+
+[functions.compute-iv-surface]
+verify_jwt = false
+
+[functions.compute-payoff]
+verify_jwt = false
+
+[functions.compute-pricer]
+verify_jwt = false
+
+[functions.scan-signals]
+verify_jwt = true
   [functions.run-backtest]
     verify_jwt = false
