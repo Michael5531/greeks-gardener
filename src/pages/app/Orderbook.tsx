@@ -69,7 +69,7 @@ export default function Orderbook() {
     const sinceNs = since * 1_000_000;
     try {
       const [q, t] = await Promise.all([
-        getOptionQuotes(optionTicker, sinceNs, 5000),
+        getOptionQuotes(optionTicker, { gte: sinceNs, limit: 5000, order: "desc" }),
         getOptionTrades(optionTicker, sinceNs, 5000),
       ]);
       setQuotes(q); setTrades(t); lastErrRef.current = null;

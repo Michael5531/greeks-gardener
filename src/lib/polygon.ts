@@ -96,8 +96,12 @@ export async function getMarketStatus() {
   return callPolygon<any>("market-status", {});
 }
 
-export async function getOptionQuotes(option_ticker: string, gte?: number, limit = 5000) {
-  const data = await callPolygon<{ results?: any[] }>("option-quotes", { option_ticker, gte, limit });
+export async function getOptionQuotes(
+  option_ticker: string,
+  opts: { gte?: number; lte?: number; limit?: number; order?: "asc" | "desc" } = {},
+) {
+  const { gte, lte, limit = 50000, order = "asc" } = opts;
+  const data = await callPolygon<{ results?: any[] }>("option-quotes", { option_ticker, gte, lte, limit, order });
   return data.results ?? [];
 }
 
