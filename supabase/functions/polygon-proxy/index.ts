@@ -92,6 +92,33 @@ Deno.serve(async (req) => {
         params.set("limit", "5000");
         break;
       }
+      case "market-status": {
+        endpoint = "/v1/marketstatus/now";
+        break;
+      }
+      case "option-quotes": {
+        const { option_ticker, gte, limit = 5000 } = body;
+        endpoint = `/v3/quotes/${encodeURIComponent(option_ticker)}`;
+        if (gte) params.set("timestamp.gte", String(gte));
+        params.set("order", "desc");
+        params.set("limit", String(limit));
+        params.set("sort", "timestamp");
+        break;
+      }
+      case "option-trades": {
+        const { option_ticker, gte, limit = 5000 } = body;
+        endpoint = `/v3/trades/${encodeURIComponent(option_ticker)}`;
+        if (gte) params.set("timestamp.gte", String(gte));
+        params.set("order", "desc");
+        params.set("limit", String(limit));
+        params.set("sort", "timestamp");
+        break;
+      }
+      case "option-snapshot-single": {
+        const { underlying, option_ticker } = body;
+        endpoint = `/v3/snapshot/options/${encodeURIComponent(underlying)}/${encodeURIComponent(option_ticker)}`;
+        break;
+      }
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }

@@ -15,6 +15,8 @@ import Greeks3D from "./pages/app/Greeks3D.tsx";
 import GEX from "./pages/app/GEX.tsx";
 import Backtest from "./pages/app/Backtest.tsx";
 import Signals from "./pages/app/Signals.tsx";
+import Orderbook from "./pages/app/Orderbook.tsx";
+import Flow from "./pages/app/Flow.tsx";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,8 @@ const App = () => (
               <Route path="chain" element={<Chain />} />
               <Route path="greeks" element={<Greeks3D />} />
               <Route path="gex" element={<GEX />} />
+              <Route path="orderbook" element={<Orderbook />} />
+              <Route path="flow" element={<Flow />} />
               <Route path="backtest" element={<Backtest />} />
               <Route path="signals" element={<Signals />} />
             </Route>
