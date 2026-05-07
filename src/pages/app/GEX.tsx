@@ -90,7 +90,7 @@ export default function GEX() {
     for (const d of baseFiltered) if (selectedExps.includes(d.details?.expiration_date)) push(d);
     for (const e of selectedExps) for (const d of (extraData[e] ?? [])) push(d);
     return out;
-  }, [baseData, extraData, selectedExps]);
+  }, [baseData, extraData, selectedExps, ticker]);
 
   // Spot: prefer live, fallback to chain
   const spot = useMemo(() => {
