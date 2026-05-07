@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { runHistoricalFlow } from "@/lib/polygon";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Bar, BarChart, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
 import OptionPricer from "@/components/OptionPricer";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
