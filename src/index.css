@@ -121,13 +121,23 @@ All colors MUST be HSL.
   }
 
   @media (max-width: 767px) {
+    /* Wrap any wide table in its parent so it can scroll horizontally
+       instead of being clipped by main's overflow-x-hidden */
     main table {
-      min-width: 720px;
+      min-width: 100%;
     }
 
+    main .recharts-responsive-container,
     main .recharts-wrapper,
     main .recharts-surface {
-      max-width: 100%;
+      max-width: 100% !important;
+    }
+
+    /* Charts that use fixed-width canvases (e.g. heatmaps) get scaled down
+       to fit the viewport */
+    main canvas {
+      max-width: 100% !important;
+      height: auto !important;
     }
   }
 
