@@ -32,8 +32,38 @@ Deno.serve(async (req) => {
         break;
       }
       case "ticker-snapshot": {
-        endpoint = `/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(body.ticker)}`;
-        break;
+        // The /v2/snapshot/.../tickers/{T} endpoint requires the Stocks Snapshot
+        // entitlement which not all plans include. Compose an equivalent
+        // payload from /prev (prevDay close) + the most recent 1-min bar
+        // (used as the "last trade" price). Returns the same shape the
+        // frontend expects: { ticker: { lastTrade: {p}, day: {c}, prevDay: {c} } }.
+        const t = encodeURIComponent(body.ticker);
+        const today = new Date();
+        const from = new Date(today.getTime() - 5 * 24 * 3600 * 1000)
+          .toISOString().slice(0, 10);
+        const to = today.toISOString().slice(0, 10);
+        const [prevR, minR] = await Promise.all([
+          fetch(`${POLYGON_BASE}/v2/aggs/ticker/${t}/prev?adjusted=true&apiKey=${apiKey}`),
+          fetch(`${POLYGON_BASE}/v2/aggs/ticker/${t}/range/1/minute/${from}/${to}?adjusted=true&sort=desc&limit=1&apiKey=${apiKey}`),
+        ]);
+        const prevJ = await prevR.json().catch(() => ({}));
+        const minJ = await minR.json().catch(() => ({}));
+        const prevClose = prevJ?.results?.[0]?.c ?? null;
+        const lastBar = minJ?.results?.[0] ?? null;
+        const lastPrice = lastBar?.c ?? prevClose;
+        return json({
+          status: "OK",
+          ticker: {
+            ticker: body.ticker,
+            lastTrade: lastPrice != null ? { p: lastPrice, t: lastBar?.t ?? Date.now() * 1e6 } : null,
+            day: { c: lastPrice, o: lastBar?.o, h: lastBar?.h, l: lastBar?.l, v: lastBar?.v },
+            min: lastBar ? { c: lastBar.c, o: lastBar.o, h: lastBar.h, l: lastBar.l, v: lastBar.v, t: lastBar.t } : null,
+            prevDay: { c: prevClose, o: prevJ?.results?.[0]?.o, h: prevJ?.results?.[0]?.h, l: prevJ?.results?.[0]?.l, v: prevJ?.results?.[0]?.v },
+            todaysChange: lastPrice != null && prevClose != null ? lastPrice - prevClose : null,
+            todaysChangePerc: lastPrice != null && prevClose ? ((lastPrice - prevClose) / prevClose) * 100 : null,
+            updated: Date.now() * 1e6,
+          },
+        });
       }
       case "options-contracts": {
         endpoint = "/v3/reference/options/contracts";
