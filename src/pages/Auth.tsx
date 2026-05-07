@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,11 +37,12 @@ export default function AuthPage() {
     toast.success("注册成功，请检查邮箱验证后登录。");
   }
   async function google() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/app` },
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: `${window.location.origin}/app`,
     });
-    if (error) toast.error(error.message);
+    if (result.error) return toast.error((result.error as Error).message);
+    if (result.redirected) return;
+    navigate("/app");
   }
 
   return (
