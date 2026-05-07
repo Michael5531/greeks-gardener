@@ -6,6 +6,39 @@ const corsHeaders = {
 
 const POLYGON_BASE = "https://api.massive.com";
 
+// ── In-memory cache + in-flight dedupe to absorb bursts and stay under the
+// upstream rate limit. Keyed by the full upstream URL (incl. apiKey).
+const TTL_MS: Record<string, number> = {
+  "ticker-snapshot": 15_000,
+  "options-snapshot-chain": 30_000,
+  "options-expirations": 5 * 60_000,
+  "options-contracts": 60_000,
+  "stock-aggregates": 30_000,
+  "option-aggregates": 60_000,
+  "market-status": 30_000,
+  "option-quotes": 10_000,
+  "option-trades": 10_000,
+  "option-snapshot-single": 15_000,
+  "search-tickers": 60_000,
+};
+const cache = new Map<string, { at: number; data: any; status: number }>();
+const inflight = new Map<string, Promise<{ data: any; status: number }>>();
+async function cachedFetchJson(key: string, ttl: number, run: () => Promise<{ data: any; status: number }>) {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < ttl) return { data: hit.data, status: hit.status };
+  const pending = inflight.get(key);
+  if (pending) return pending;
+  const p = (async () => {
+    try {
+      const r = await run();
+      if (r.status < 400) cache.set(key, { at: Date.now(), data: r.data, status: r.status });
+      return r;
+    } finally { inflight.delete(key); }
+  })();
+  inflight.set(key, p);
+  return p;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -18,6 +51,7 @@ Deno.serve(async (req) => {
     const body = req.method === "POST" ? await req.json() : {};
     const url = new URL(req.url);
     const action = body.action ?? url.searchParams.get("action");
+    const ttl = TTL_MS[action] ?? 10_000;
 
     let endpoint = "";
     const params = new URLSearchParams();
