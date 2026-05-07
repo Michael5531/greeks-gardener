@@ -10,8 +10,9 @@ const inflight = new Map<string, Promise<any>>();
 // Per-action cache TTL (ms). 0 = no cache.
 const TTL: Record<string, number> = {
   // Underlying snapshot — many components mount useLiveQuote for the same
-  // ticker; share results aggressively. Refresh tick is 30s anyway.
-  "ticker-snapshot": 15_000,
+  // ticker; cache briefly so multiple cards share the request, but refresh
+  // fast enough that dashboard prices feel live.
+  "ticker-snapshot": 4_000,
   "stock-aggregates": 5 * 60_000,
   "options-expirations": 10 * 60_000,
   "options-contracts": 5 * 60_000,
