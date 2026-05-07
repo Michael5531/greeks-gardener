@@ -4,7 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const POLYGON_BASE = "https://api.massive.com";
+const POLYGON_BASE = "https://api.polygon.io";
 
 // ── In-memory cache + in-flight dedupe to absorb bursts and stay under the
 // upstream rate limit. Keyed by the full upstream URL (incl. apiKey).
