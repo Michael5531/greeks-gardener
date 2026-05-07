@@ -115,6 +115,22 @@ All colors MUST be HSL.
     background-attachment: fixed;
   }
 
+  #root {
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  @media (max-width: 767px) {
+    main table {
+      min-width: 720px;
+    }
+
+    main .recharts-wrapper,
+    main .recharts-surface {
+      max-width: 100%;
+    }
+  }
+
   .font-mono, code, .tabular-nums {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
