@@ -68,10 +68,10 @@ export default function GEX() {
         </div>
         <div className="flex items-center gap-2">
           {expirations.length > 0 && (
-            <Select value={exp} onValueChange={setExp}>
-              <SelectTrigger className="w-44 font-mono"><SelectValue placeholder="所有到期" /></SelectTrigger>
+            <Select value={exp ?? "ALL"} onValueChange={(v) => setExp(v === "ALL" ? undefined : v)}>
+              <SelectTrigger className="w-44 font-mono"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL" onClick={() => setExp(undefined)} className="font-mono">所有到期</SelectItem>
+                <SelectItem value="ALL" className="font-mono">所有到期</SelectItem>
                 {expirations.map(e => <SelectItem key={e} value={e} className="font-mono">{e}</SelectItem>)}
               </SelectContent>
             </Select>
