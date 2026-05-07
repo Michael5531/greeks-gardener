@@ -47,7 +47,7 @@ export default function GEX() {
   const rows = useMemo(() => {
     if (!spot) return [];
     const filtered = exp ? data.filter(d => d.details?.expiration_date === exp) : data;
-    const map = new Map<number, { strike: number; callGex: number; putGex: number }>();
+    const map = new Map<number, { strike: number; callGex: number; putGex: number; callOI: number; putOI: number }>();
     for (const d of filtered) {
       const g = d.greeks?.gamma; const oi = d.open_interest ?? 0;
       if (g == null || !oi) continue;
@@ -55,15 +55,41 @@ export default function GEX() {
       const isCall = d.details.contract_type === "call";
       // GEX = OI * gamma * 100 * S^2 * 0.01  ; puts negative
       const gex = oi * g * 100 * spot * spot * 0.01;
-      const r = map.get(k) ?? { strike: k, callGex: 0, putGex: 0 };
-      if (isCall) r.callGex += gex; else r.putGex -= gex;
+      const r = map.get(k) ?? { strike: k, callGex: 0, putGex: 0, callOI: 0, putOI: 0 };
+      if (isCall) { r.callGex += gex; r.callOI += oi; }
+      else { r.putGex -= gex; r.putOI += oi; }
       map.set(k, r);
     }
     return Array.from(map.values())
       .filter(r => r.strike > spot * 0.7 && r.strike < spot * 1.3)
       .sort((a,b) => a.strike - b.strike)
-      .map(r => ({ ...r, net: r.callGex + r.putGex }));
+      .map(r => ({ ...r, net: r.callGex + r.putGex, totalOI: r.callOI + r.putOI }));
   }, [data, exp, spot]);
+
+  // DTE distribution: aggregate OI & |GEX| per expiration
+  const dteRows = useMemo(() => {
+    if (!spot) return [];
+    const map = new Map<string, { exp: string; dte: number; callOI: number; putOI: number; callGex: number; putGex: number }>();
+    const today = new Date(); today.setHours(0,0,0,0);
+    for (const d of data) {
+      const g = d.greeks?.gamma; const oi = d.open_interest ?? 0;
+      const e = d.details?.expiration_date;
+      if (!e || g == null || !oi) continue;
+      const isCall = d.details.contract_type === "call";
+      const gex = oi * g * 100 * spot * spot * 0.01;
+      const dte = Math.max(0, Math.round((new Date(e).getTime() - today.getTime()) / 86400000));
+      const r = map.get(e) ?? { exp: e, dte, callOI: 0, putOI: 0, callGex: 0, putGex: 0 };
+      if (isCall) { r.callOI += oi; r.callGex += gex; }
+      else { r.putOI += oi; r.putGex -= gex; }
+      map.set(e, r);
+    }
+    return Array.from(map.values())
+      .sort((a, b) => a.dte - b.dte)
+      .map(r => ({ ...r, totalOI: r.callOI + r.putOI, netGex: r.callGex + r.putGex, label: `${r.exp.slice(5)} (${r.dte}d)` }));
+  }, [data, spot]);
+
+  const totalContracts = data.length;
+  const totalOI = useMemo(() => data.reduce((a, d) => a + (d.open_interest ?? 0), 0), [data]);
 
   // zero gamma level: linear interpolation where cumulative net crosses zero
   const zeroGamma = useMemo(() => {
