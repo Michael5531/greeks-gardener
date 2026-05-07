@@ -14,7 +14,164 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      backtests: {
+        Row: {
+          created_at: string
+          end_date: string
+          equity_curve: Json | null
+          id: string
+          metrics: Json | null
+          params: Json
+          start_date: string
+          status: string
+          strategy_id: string | null
+          ticker: string
+          trades: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          equity_curve?: Json | null
+          id?: string
+          metrics?: Json | null
+          params?: Json
+          start_date: string
+          status?: string
+          strategy_id?: string | null
+          ticker: string
+          trades?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          equity_curve?: Json | null
+          id?: string
+          metrics?: Json | null
+          params?: Json
+          start_date?: string
+          status?: string
+          strategy_id?: string | null
+          ticker?: string
+          trades?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtests_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      signals: {
+        Row: {
+          created_at: string
+          id: string
+          signal: Json
+          strategy_type: string
+          ticker: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          signal: Json
+          strategy_type: string
+          ticker: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          signal?: Json
+          strategy_type?: string
+          ticker?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      strategies: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          params: Json
+          strategy_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          params?: Json
+          strategy_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          params?: Json
+          strategy_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      watchlist: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          ticker: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ticker: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ticker?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
