@@ -51,9 +51,9 @@ function ChainTable({ title, rows, accent }: { title: string; rows: any[]; accen
   return (
     <div className="rounded-lg border border-border bg-card/40 overflow-hidden">
       <div className={`px-4 py-2 text-sm font-semibold border-b border-border ${accent === "bull" ? "text-bull" : "text-bear"}`}>{title}</div>
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[640px]">
         <table className="w-full text-xs font-mono">
-          <thead className="text-muted-foreground bg-secondary/30">
+          <thead className="text-muted-foreground bg-secondary sticky top-0 z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
             <tr>
               <th className="text-right px-2 py-1.5">Strike</th>
               <th className="text-right px-2 py-1.5">Bid/Ask</th>
