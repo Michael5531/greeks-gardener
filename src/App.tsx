@@ -17,11 +17,13 @@ import Backtest from "./pages/app/Backtest.tsx";
 import Signals from "./pages/app/Signals.tsx";
 import Orderbook from "./pages/app/Orderbook.tsx";
 import Flow from "./pages/app/Flow.tsx";
+import { LanguageProvider } from "./i18n";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <LanguageProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -45,6 +47,7 @@ const App = () => (
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
+    </LanguageProvider>
   </QueryClientProvider>
 );
 
