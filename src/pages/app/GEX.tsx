@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import TickerSearch from "@/components/TickerSearch";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
-import { getOptionsChain } from "@/lib/polygon";
 import { fmt } from "@/lib/optionUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +12,8 @@ import { Sparkles, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import DTEStackedChart, { buildExpColors } from "@/components/charts/DTEStackedChart";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
+import { useComputeGEX } from "@/hooks/useComputeGEX";
+import { useComputeIVSurface } from "@/hooks/useComputeIVSurface";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -26,10 +27,8 @@ function AIMarkdown({ text }: { text: string }) {
 
 export default function GEX() {
   const [ticker, setTicker] = useSelectedTicker();
-  const { data: baseData, expirations, loading } = useOptionsChain(ticker || null);
+  const { expirations, loading: expLoading } = useOptionsChain(ticker || null);
   const [selectedExps, setSelectedExps] = useState<string[]>([]);
-  const [extraDataAll, setExtraDataAll] = useState<Record<string, Record<string, any[]>>>({});
-  const extraData = (ticker && extraDataAll[ticker]) || {};
   useEffect(() => { setSelectedExps([]); }, [ticker]);
   const [metric, setMetric] = useState<"oi" | "gex">("gex");
   const [aiText, setAiText] = useState("");
@@ -55,126 +54,29 @@ export default function GEX() {
     setSelectedExps(Array.from(new Set(defaults)));
   }, [expirations]);
 
-  // Fetch missing expirations (per-ticker cache to avoid stale leaks across symbols)
-  useEffect(() => {
-    if (!ticker) return;
-    const baseForTicker = baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`));
-    const have = new Set(baseForTicker.map(d => d.details?.expiration_date).filter(Boolean));
-    const missing = selectedExps.filter(e => !have.has(e) && !extraData[e]);
-    if (!missing.length) return;
-    let cancelled = false;
-    const tk = ticker;
-    Promise.all(missing.map(async e => {
-      try { return [e, await getOptionsChain(tk, e)] as const; } catch { return [e, [] as any[]] as const; }
-    })).then(results => {
-      if (cancelled) return;
-      setExtraDataAll(prev => {
-        const bucket = { ...(prev[tk] ?? {}) };
-        for (const [e, r] of results) bucket[e] = r;
-        return { ...prev, [tk]: bucket };
-      });
-    });
-    return () => { cancelled = true; };
-  }, [ticker, selectedExps, baseData]);
+  // Backend computations
+  const { data: gex, loading: gexLoading } = useComputeGEX(ticker, selectedExps);
+  const { data: ivs, loading: ivsLoading } = useComputeIVSurface(
+    metric === "oi" ? ticker : null, // OI pivot only needed for "oi" metric
+    selectedExps,
+  );
+  const loading = expLoading || gexLoading || (metric === "oi" && ivsLoading);
 
-  const data = useMemo(() => {
-    const baseFiltered = ticker
-      ? baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`))
-      : baseData;
-    if (!selectedExps.length) return baseFiltered;
-    const seen = new Set<string>(); const out: any[] = [];
-    const push = (d: any) => {
-      const k = `${d.details?.ticker}|${d.details?.strike_price}|${d.details?.expiration_date}|${d.details?.contract_type}`;
-      if (seen.has(k)) return; seen.add(k); out.push(d);
-    };
-    for (const d of baseFiltered) if (selectedExps.includes(d.details?.expiration_date)) push(d);
-    for (const e of selectedExps) for (const d of (extraData[e] ?? [])) push(d);
-    return out;
-  }, [baseData, extraData, selectedExps, ticker]);
-
-  // Spot: prefer live, fallback to chain
-  const spot = useMemo(() => {
-    if (quote?.price != null) return quote.price;
-    for (const d of data) { const p = d.underlying_asset?.price; if (p != null) return p; }
-    return null;
-  }, [data, quote?.price]);
-
+  const spot = quote?.price ?? gex?.spot ?? null;
   const expColors = useMemo(() => buildExpColors(selectedExps), [selectedExps]);
 
-  // Pivot per strike, per exp, call positive / put negative; for OI or |GEX|
-  const { strikePivot, totalGEX, zeroGamma } = useMemo(() => {
-    const map = new Map<number, any>();
-    let totalGex = 0;
-    const netByStrike = new Map<number, number>();
-    for (const d of data) {
-      const k = d.details?.strike_price;
-      const e = d.details?.expiration_date;
-      const oi = d.open_interest ?? 0;
-      const g = d.greeks?.gamma;
-      if (k == null || !e || !selectedExps.includes(e)) continue;
-      const isCall = d.details?.contract_type === "call";
-      const row = map.get(k) ?? { strike: k };
-      let val = 0;
-      if (metric === "oi") {
-        val = oi;
-      } else {
-        if (g == null || !oi || spot == null) continue;
-        val = oi * g * 100 * spot * spot * 0.01;
-      }
-      if (isCall) row[`${e}__c`] = (row[`${e}__c`] ?? 0) + val;
-      else row[`${e}__p`] = (row[`${e}__p`] ?? 0) - val;
-      map.set(k, row);
-      if (metric === "gex") {
-        const signed = isCall ? val : -val;
-        netByStrike.set(k, (netByStrike.get(k) ?? 0) + signed);
-        totalGex += signed;
-      }
-    }
-    let strikes = Array.from(map.values()).sort((a, b) => a.strike - b.strike);
-    if (spot != null) strikes = strikes.filter(r => r.strike > spot * 0.7 && r.strike < spot * 1.3);
-
-    // zero gamma
-    let zg: number | null = null;
-    if (metric === "gex") {
-      const sorted = Array.from(netByStrike.entries()).sort((a, b) => a[0] - b[0]);
-      let cum = 0; const cums = sorted.map(([s, v]) => (cum += v, { strike: s, cum }));
-      for (let i = 1; i < cums.length; i++) {
-        if (cums[i-1].cum < 0 && cums[i].cum >= 0) {
-          const t = -cums[i-1].cum / (cums[i].cum - cums[i-1].cum);
-          zg = cums[i-1].strike + t * (cums[i].strike - cums[i-1].strike);
-          break;
-        }
-      }
-    }
-    return { strikePivot: strikes, totalGEX: totalGex, zeroGamma: zg };
-  }, [data, selectedExps, metric, spot]);
-
-  // Per-expiration aggregate (for second chart, X = expiration)
-  const expPivot = useMemo(() => {
-    const map = new Map<string, any>();
-    for (const d of data) {
-      const e = d.details?.expiration_date;
-      const oi = d.open_interest ?? 0;
-      const g = d.greeks?.gamma;
-      if (!e || !selectedExps.includes(e)) continue;
-      const isCall = d.details?.contract_type === "call";
-      const row = map.get(e) ?? { exp: e };
-      let val = 0;
-      if (metric === "oi") val = oi;
-      else {
-        if (g == null || !oi || spot == null) continue;
-        val = oi * g * 100 * spot * spot * 0.01;
-      }
-      // single color per expiration: use that exp's column on this row's exp = same exp
-      if (isCall) row[`${e}__c`] = (row[`${e}__c`] ?? 0) + val;
-      else row[`${e}__p`] = (row[`${e}__p`] ?? 0) - val;
-      map.set(e, row);
-    }
-    return Array.from(map.values()).sort((a, b) => a.exp.localeCompare(b.exp));
-  }, [data, selectedExps, metric, spot]);
-
-  const totalContracts = data.length;
-  const totalOI = useMemo(() => data.reduce((a, d) => a + (d.open_interest ?? 0), 0), [data]);
+  const strikePivot = metric === "gex" ? (gex?.rows ?? []) : (ivs?.strikePivotOI ?? []);
+  const expPivot = metric === "gex"
+    ? (gex?.expRows ?? [])
+    : (ivs?.byExp ?? []).map((r: any) => ({
+        exp: r.exp,
+        [`${r.exp}__c`]: r.callOI,
+        [`${r.exp}__p`]: -r.putOI,
+      }));
+  const totalGEX = gex?.total ?? 0;
+  const zeroGamma = gex?.flip ?? null;
+  const totalContracts = gex?.contractCount ?? 0;
+  const totalOI = gex?.totalOI ?? 0;
 
   // Build "rows" payload for AI (use simplified)
   const rowsForAI = useMemo(() => strikePivot.map(r => ({ strike: r.strike })), [strikePivot]);
