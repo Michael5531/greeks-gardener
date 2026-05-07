@@ -47,7 +47,7 @@ export default function GEX() {
   const rows = useMemo(() => {
     if (!spot) return [];
     const filtered = exp ? data.filter(d => d.details?.expiration_date === exp) : data;
-    const map = new Map<number, { strike: number; callGex: number; putGex: number }>();
+    const map = new Map<number, { strike: number; callGex: number; putGex: number; callOI: number; putOI: number }>();
     for (const d of filtered) {
       const g = d.greeks?.gamma; const oi = d.open_interest ?? 0;
       if (g == null || !oi) continue;
@@ -55,15 +55,41 @@ export default function GEX() {
       const isCall = d.details.contract_type === "call";
       // GEX = OI * gamma * 100 * S^2 * 0.01  ; puts negative
       const gex = oi * g * 100 * spot * spot * 0.01;
-      const r = map.get(k) ?? { strike: k, callGex: 0, putGex: 0 };
-      if (isCall) r.callGex += gex; else r.putGex -= gex;
+      const r = map.get(k) ?? { strike: k, callGex: 0, putGex: 0, callOI: 0, putOI: 0 };
+      if (isCall) { r.callGex += gex; r.callOI += oi; }
+      else { r.putGex -= gex; r.putOI += oi; }
       map.set(k, r);
     }
     return Array.from(map.values())
       .filter(r => r.strike > spot * 0.7 && r.strike < spot * 1.3)
       .sort((a,b) => a.strike - b.strike)
-      .map(r => ({ ...r, net: r.callGex + r.putGex }));
+      .map(r => ({ ...r, net: r.callGex + r.putGex, totalOI: r.callOI + r.putOI }));
   }, [data, exp, spot]);
+
+  // DTE distribution: aggregate OI & |GEX| per expiration
+  const dteRows = useMemo(() => {
+    if (!spot) return [];
+    const map = new Map<string, { exp: string; dte: number; callOI: number; putOI: number; callGex: number; putGex: number }>();
+    const today = new Date(); today.setHours(0,0,0,0);
+    for (const d of data) {
+      const g = d.greeks?.gamma; const oi = d.open_interest ?? 0;
+      const e = d.details?.expiration_date;
+      if (!e || g == null || !oi) continue;
+      const isCall = d.details.contract_type === "call";
+      const gex = oi * g * 100 * spot * spot * 0.01;
+      const dte = Math.max(0, Math.round((new Date(e).getTime() - today.getTime()) / 86400000));
+      const r = map.get(e) ?? { exp: e, dte, callOI: 0, putOI: 0, callGex: 0, putGex: 0 };
+      if (isCall) { r.callOI += oi; r.callGex += gex; }
+      else { r.putOI += oi; r.putGex -= gex; }
+      map.set(e, r);
+    }
+    return Array.from(map.values())
+      .sort((a, b) => a.dte - b.dte)
+      .map(r => ({ ...r, totalOI: r.callOI + r.putOI, netGex: r.callGex + r.putGex, label: `${r.exp.slice(5)} (${r.dte}d)` }));
+  }, [data, spot]);
+
+  const totalContracts = data.length;
+  const totalOI = useMemo(() => data.reduce((a, d) => a + (d.open_interest ?? 0), 0), [data]);
 
   // zero gamma level: linear interpolation where cumulative net crosses zero
   const zeroGamma = useMemo(() => {
@@ -177,10 +203,12 @@ export default function GEX() {
         </div>
       )}
 
-      <div className="grid sm:grid-cols-3 gap-3">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <Stat label="Spot" value={spot ? `$${fmt(spot)}` : "—"} />
         <Stat label="Total Net GEX" value={fmt(totalGEX / 1e6, 2) + "M"} positive={totalGEX >= 0} />
         <Stat label="Zero Gamma" value={zeroGamma ? `$${fmt(zeroGamma)}` : "—"} />
+        <Stat label="合约数" value={`${totalContracts}`} />
+        <Stat label="总 OI" value={totalOI >= 1e6 ? `${(totalOI/1e6).toFixed(2)}M` : totalOI >= 1e3 ? `${(totalOI/1e3).toFixed(1)}K` : `${totalOI}`} />
       </div>
 
       <div className="rounded-lg border border-border bg-card/40 p-4 h-[500px]">
@@ -191,18 +219,52 @@ export default function GEX() {
             <BarChart data={rows} margin={{ top: 12, right: 12, left: 0, bottom: 24 }}>
               <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
               <XAxis dataKey="strike" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
+              <YAxis yAxisId="gex" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
                 tickFormatter={(v: number) => `${(v/1e6).toFixed(1)}M`} />
+              <YAxis yAxisId="oi" orientation="right" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
+                tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : `${v}`} />
               <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}
-                formatter={(v: number) => `${(v/1e6).toFixed(2)}M`} />
+                formatter={(v: number, name: string) => name === "OI" ? v.toLocaleString() : `${(v/1e6).toFixed(2)}M`} />
               {spot && <ReferenceLine x={Math.round(spot)} stroke="hsl(var(--primary))" strokeDasharray="3 3" label={{ value: "Spot", fill: "hsl(var(--primary))", fontSize: 10 }} />}
               {zeroGamma && <ReferenceLine x={Math.round(zeroGamma)} stroke="hsl(var(--accent))" strokeDasharray="3 3" label={{ value: "Zero γ", fill: "hsl(var(--accent))", fontSize: 10 }} />}
-              <Bar dataKey="net">
+              <Bar yAxisId="oi" dataKey="totalOI" name="OI" fill="hsl(var(--muted-foreground) / 0.25)" />
+              <Bar yAxisId="gex" dataKey="net" name="Net GEX">
                 {rows.map((r, i) => <Cell key={i} fill={r.net >= 0 ? "hsl(var(--bull))" : "hsl(var(--bear))"} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/40 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold">DTE 分布</h2>
+            <p className="text-xs text-muted-foreground">按到期日聚合 OI 与 |Net GEX|（全数据，不受到期筛选影响）</p>
+          </div>
+        </div>
+        <div className="h-[320px]">
+          {dteRows.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dteRows} margin={{ top: 8, right: 12, left: 0, bottom: 40 }}>
+                <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
+                <XAxis dataKey="label" angle={-35} textAnchor="end" height={60}
+                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis yAxisId="oi" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : `${v}`} />
+                <YAxis yAxisId="gex" orientation="right" tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }}
+                  tickFormatter={(v: number) => `${(v/1e6).toFixed(1)}M`} />
+                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}
+                  formatter={(v: number, name: string) => name.includes("OI") ? v.toLocaleString() : `${(v/1e6).toFixed(2)}M`} />
+                <Bar yAxisId="oi" dataKey="callOI" name="Call OI" stackId="oi" fill="hsl(var(--bull) / 0.7)" />
+                <Bar yAxisId="oi" dataKey="putOI" name="Put OI" stackId="oi" fill="hsl(var(--bear) / 0.7)" />
+                <Bar yAxisId="gex" dataKey="netGex" name="Net GEX" fill="hsl(var(--primary))" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="grid place-items-center h-full text-xs text-muted-foreground">暂无数据</div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
