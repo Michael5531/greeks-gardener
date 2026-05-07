@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import ChartSizer from "@/components/charts/ChartSizer";
 import { getStrategy } from "@/lib/strategies";
 import { useComputePayoff } from "@/hooks/useComputePayoff";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
@@ -76,8 +77,9 @@ export default function StrategyCard({
       </div>
 
       <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={grid} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+        <ChartSizer>
+          {({ width, height }) => (
+          <ComposedChart width={width} height={height} data={grid} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
             <CartesianGrid stroke="hsl(var(--grid-line))" />
             <XAxis dataKey="price" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
             <YAxis tickFormatter={v => `$${v}`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
@@ -91,7 +93,8 @@ export default function StrategyCard({
             <Line type="monotone" dataKey="today" stroke="hsl(var(--accent))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="今日 PnL" />
             <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} />
           </ComposedChart>
-        </ResponsiveContainer>
+          )}
+        </ChartSizer>
       </div>
     </div>
   );
