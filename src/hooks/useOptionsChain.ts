@@ -8,14 +8,18 @@ export function useOptionsChain(ticker: string | null, expiration?: string) {
   const [expirations, setExpirations] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!ticker) return;
+    if (!ticker) { setData([]); setLoading(false); setError(null); return; }
+    let cancelled = false;
     setLoading(true); setError(null);
     getOptionsChain(ticker, expiration)
       .then(r => {
+        if (cancelled) return;
         setData(r);
       })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
   }, [ticker, expiration]);
 
   // Fetch the FULL list of expirations independently of the snapshot chain,
