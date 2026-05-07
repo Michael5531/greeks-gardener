@@ -153,4 +153,35 @@ All colors MUST be HSL.
       linear-gradient(90deg, hsl(var(--grid-line)) 1px, transparent 1px);
     background-size: 32px 32px;
   }
+
+  @media (max-width: 767px) {
+    main > div.p-6 {
+      padding: 1rem;
+    }
+
+    main .w-72 {
+      width: 100%;
+    }
+
+    main > div > .flex.items-center.justify-between {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    main > div > .flex.items-center.justify-between > .flex {
+      flex-wrap: wrap;
+      width: 100%;
+    }
+
+    main th,
+    main td {
+      white-space: nowrap;
+    }
+
+    main .rounded-lg.overflow-hidden,
+    main .overflow-auto {
+      -webkit-overflow-scrolling: touch;
+    }
+  }
 }
