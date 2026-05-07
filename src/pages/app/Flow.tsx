@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import TickerSearch from "@/components/TickerSearch";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
 import OptionPricer from "@/components/OptionPricer";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
@@ -30,6 +31,22 @@ export default function Flow() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
 
+  // Filter / sort state for prints table
+  const [pf, setPf] = useState({
+    type: "all" as "all" | "call" | "put",
+    context: "all" as "all" | "at ask" | "at bid" | "above ask" | "below bid" | "mid",
+    contract: "",
+    strikeMin: "" as string,
+    strikeMax: "" as string,
+    sizeMin: "" as string,
+    premiumMin: "" as string,
+  });
+  const [pSort, setPSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "premium", dir: "desc" });
+
+  // Filter / sort state for sweeps
+  const [sf, setSf] = useState({ contract: "", legsMin: "" as string, premiumMin: "" as string });
+  const [sSort, setSSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "totalPremium", dir: "desc" });
+
   async function run() {
     if (!ticker) { toast.error("请先选择标的"); return; }
     setLoading(true);
@@ -48,6 +65,51 @@ export default function Flow() {
   const prints: any[] = result?.large_prints ?? [];
   const contracts: any[] = result?.contracts ?? [];
   const sweeps: any[] = result?.sweeps ?? [];
+
+  const filteredPrints = useMemo(() => {
+    const sMin = pf.strikeMin === "" ? -Infinity : +pf.strikeMin;
+    const sMax = pf.strikeMax === "" ? Infinity : +pf.strikeMax;
+    const szMin = pf.sizeMin === "" ? 0 : +pf.sizeMin;
+    const pMin = pf.premiumMin === "" ? 0 : +pf.premiumMin;
+    const cq = pf.contract.trim().toUpperCase();
+    let out = prints.filter(p =>
+      (pf.type === "all" || p.type === pf.type) &&
+      (pf.context === "all" || p.context === pf.context) &&
+      (!cq || (p.ticker || "").toUpperCase().includes(cq)) &&
+      (p.strike ?? 0) >= sMin && (p.strike ?? 0) <= sMax &&
+      (p.size ?? 0) >= szMin &&
+      (p.premium ?? 0) >= pMin
+    );
+    const k = pSort.key, d = pSort.dir === "asc" ? 1 : -1;
+    out = out.slice().sort((a, b) => {
+      const av = a[k], bv = b[k];
+      if (typeof av === "string") return av.localeCompare(bv) * d;
+      return ((av ?? 0) - (bv ?? 0)) * d;
+    });
+    return out;
+  }, [prints, pf, pSort]);
+
+  const filteredSweeps = useMemo(() => {
+    const lMin = sf.legsMin === "" ? 0 : +sf.legsMin;
+    const pMin = sf.premiumMin === "" ? 0 : +sf.premiumMin;
+    const cq = sf.contract.trim().toUpperCase();
+    let out = sweeps.filter(s =>
+      (!cq || (s.ticker || "").toUpperCase().includes(cq)) &&
+      (s.legs ?? 0) >= lMin &&
+      (s.totalPremium ?? 0) >= pMin
+    );
+    const k = sSort.key, d = sSort.dir === "asc" ? 1 : -1;
+    out = out.slice().sort((a, b) => ((a[k] ?? 0) - (b[k] ?? 0)) * d);
+    return out;
+  }, [sweeps, sf, sSort]);
+
+  const togglePSort = (key: string) =>
+    setPSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" });
+  const toggleSSort = (key: string) =>
+    setSSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" });
+  const SortIcon = ({ active, dir }: { active: boolean; dir: "asc" | "desc" }) =>
+    !active ? <ArrowUpDown className="inline h-3 w-3 ml-1 opacity-40" />
+      : dir === "asc" ? <ArrowUp className="inline h-3 w-3 ml-1" /> : <ArrowDown className="inline h-3 w-3 ml-1" />;
 
   // scatter data
   const scatterCalls = prints.filter(p => p.type === "call").map(p => ({ x: p.time, y: p.strike, z: p.premium, ...p }));
@@ -201,17 +263,43 @@ export default function Flow() {
           </div>
 
           <div className="rounded-lg border border-border bg-card/40 p-4">
-            <div className="text-sm font-semibold mb-2">Large Single Prints <span className="text-xs text-muted-foreground ml-2">前 200 条按 premium 排序</span></div>
+            <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+              <div className="text-sm font-semibold">Large Single Prints <span className="text-xs text-muted-foreground ml-2">{filteredPrints.length} / {prints.length}</span></div>
+              <button className="text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={() => setPf({ type: "all", context: "all", contract: "", strikeMin: "", strikeMax: "", sizeMin: "", premiumMin: "" })}>清除筛选</button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
+              <select className="h-7 text-xs bg-background border border-border rounded px-2" value={pf.type} onChange={e => setPf({ ...pf, type: e.target.value as any })}>
+                <option value="all">全部类型</option><option value="call">call</option><option value="put">put</option>
+              </select>
+              <select className="h-7 text-xs bg-background border border-border rounded px-2" value={pf.context} onChange={e => setPf({ ...pf, context: e.target.value as any })}>
+                <option value="all">全部 context</option>
+                <option value="at ask">at ask</option><option value="above ask">above ask</option>
+                <option value="mid">mid</option>
+                <option value="at bid">at bid</option><option value="below bid">below bid</option>
+              </select>
+              <Input placeholder="合约" value={pf.contract} onChange={e => setPf({ ...pf, contract: e.target.value })} className="h-7 text-xs font-mono" />
+              <Input placeholder="Strike ≥" value={pf.strikeMin} onChange={e => setPf({ ...pf, strikeMin: e.target.value })} className="h-7 text-xs font-mono" />
+              <Input placeholder="Strike ≤" value={pf.strikeMax} onChange={e => setPf({ ...pf, strikeMax: e.target.value })} className="h-7 text-xs font-mono" />
+              <Input placeholder="size ≥" value={pf.sizeMin} onChange={e => setPf({ ...pf, sizeMin: e.target.value })} className="h-7 text-xs font-mono" />
+              <Input placeholder="premium ≥ $" value={pf.premiumMin} onChange={e => setPf({ ...pf, premiumMin: e.target.value })} className="h-7 text-xs font-mono" />
+            </div>
             <div className="overflow-auto max-h-[480px]">
               <table className="w-full text-xs font-mono">
                 <thead className="text-muted-foreground sticky top-0 bg-card">
-                  <tr className="text-left">
-                    <th className="p-2">时间</th><th className="p-2">合约</th><th className="p-2">类型</th><th className="p-2">Strike</th>
-                    <th className="p-2 text-right">price</th><th className="p-2 text-right">size</th><th className="p-2 text-right">premium</th><th className="p-2">context</th>
+                  <tr className="text-left select-none">
+                    <th className="p-2 cursor-pointer" onClick={() => togglePSort("time")}>时间<SortIcon active={pSort.key==="time"} dir={pSort.dir} /></th>
+                    <th className="p-2 cursor-pointer" onClick={() => togglePSort("ticker")}>合约<SortIcon active={pSort.key==="ticker"} dir={pSort.dir} /></th>
+                    <th className="p-2 cursor-pointer" onClick={() => togglePSort("type")}>类型<SortIcon active={pSort.key==="type"} dir={pSort.dir} /></th>
+                    <th className="p-2 cursor-pointer" onClick={() => togglePSort("strike")}>Strike<SortIcon active={pSort.key==="strike"} dir={pSort.dir} /></th>
+                    <th className="p-2 text-right cursor-pointer" onClick={() => togglePSort("price")}>price<SortIcon active={pSort.key==="price"} dir={pSort.dir} /></th>
+                    <th className="p-2 text-right cursor-pointer" onClick={() => togglePSort("size")}>size<SortIcon active={pSort.key==="size"} dir={pSort.dir} /></th>
+                    <th className="p-2 text-right cursor-pointer" onClick={() => togglePSort("premium")}>premium<SortIcon active={pSort.key==="premium"} dir={pSort.dir} /></th>
+                    <th className="p-2 cursor-pointer" onClick={() => togglePSort("context")}>context<SortIcon active={pSort.key==="context"} dir={pSort.dir} /></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {prints.map((p, i) => (
+                  {filteredPrints.map((p, i) => (
                     <tr key={i} className="border-t border-border/50">
                       <td className="p-2 whitespace-nowrap">{new Date(p.time).toISOString().replace("T", " ").slice(0, 19)}</td>
                       <td className="p-2">{p.ticker.replace("O:", "")}</td>
@@ -230,17 +318,30 @@ export default function Flow() {
 
           {sweeps.length > 0 && (
             <div className="rounded-lg border border-border bg-card/40 p-4">
-              <div className="text-sm font-semibold mb-2">Sweep 候选</div>
+              <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+                <div className="text-sm font-semibold">Sweep 候选 <span className="text-xs text-muted-foreground ml-2">{filteredSweeps.length} / {sweeps.length}</span></div>
+                <button className="text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => setSf({ contract: "", legsMin: "", premiumMin: "" })}>清除筛选</button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+                <Input placeholder="合约" value={sf.contract} onChange={e => setSf({ ...sf, contract: e.target.value })} className="h-7 text-xs font-mono" />
+                <Input placeholder="腿数 ≥" value={sf.legsMin} onChange={e => setSf({ ...sf, legsMin: e.target.value })} className="h-7 text-xs font-mono" />
+                <Input placeholder="premium ≥ $" value={sf.premiumMin} onChange={e => setSf({ ...sf, premiumMin: e.target.value })} className="h-7 text-xs font-mono" />
+              </div>
               <div className="overflow-auto max-h-80">
                 <table className="w-full text-xs font-mono">
                   <thead className="text-muted-foreground sticky top-0 bg-card">
-                    <tr className="text-left">
-                      <th className="p-2">起始</th><th className="p-2">合约</th><th className="p-2 text-right">腿数</th>
-                      <th className="p-2 text-right">size</th><th className="p-2 text-right">premium</th><th className="p-2 text-right">price</th>
+                    <tr className="text-left select-none">
+                      <th className="p-2 cursor-pointer" onClick={() => toggleSSort("start")}>起始<SortIcon active={sSort.key==="start"} dir={sSort.dir} /></th>
+                      <th className="p-2 cursor-pointer" onClick={() => toggleSSort("ticker")}>合约<SortIcon active={sSort.key==="ticker"} dir={sSort.dir} /></th>
+                      <th className="p-2 text-right cursor-pointer" onClick={() => toggleSSort("legs")}>腿数<SortIcon active={sSort.key==="legs"} dir={sSort.dir} /></th>
+                      <th className="p-2 text-right cursor-pointer" onClick={() => toggleSSort("totalSize")}>size<SortIcon active={sSort.key==="totalSize"} dir={sSort.dir} /></th>
+                      <th className="p-2 text-right cursor-pointer" onClick={() => toggleSSort("totalPremium")}>premium<SortIcon active={sSort.key==="totalPremium"} dir={sSort.dir} /></th>
+                      <th className="p-2 text-right cursor-pointer" onClick={() => toggleSSort("price")}>price<SortIcon active={sSort.key==="price"} dir={sSort.dir} /></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sweeps.map((s, i) => (
+                    {filteredSweeps.map((s, i) => (
                       <tr key={i} className="border-t border-border/50">
                         <td className="p-2">{new Date(s.start).toISOString().replace("T", " ").slice(0, 19)}</td>
                         <td className="p-2">{s.ticker.replace("O:", "")}</td>
