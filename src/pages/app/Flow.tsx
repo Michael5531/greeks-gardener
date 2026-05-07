@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import TickerSearch from "@/components/TickerSearch";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { runHistoricalFlow } from "@/lib/polygon";
 import { Loader2 } from "lucide-react";
@@ -14,8 +15,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
 
 export default function Flow() {
-  const [params, setParams] = useSearchParams();
-  const ticker = params.get("ticker") ?? "";
+  const [ticker, setTicker] = useSelectedTicker();
 
   const [fromDate, setFromDate] = useState(ago(5));
   const [toDate, setToDate] = useState(today());
@@ -87,12 +87,12 @@ export default function Flow() {
           <h1 className="text-2xl font-semibold tracking-tight">历史期权流</h1>
           <p className="text-sm text-muted-foreground">扫描历史 trades & quotes，标记大单与 sweep 候选</p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
+        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       <div className="rounded-lg border border-border bg-card/40 p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <Field label="起始日"><Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-8 font-mono text-xs" /></Field>
-        <Field label="结束日"><Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-8 font-mono text-xs" /></Field>
+        <Field label="起始日"><DatePicker value={fromDate} onChange={setFromDate} /></Field>
+        <Field label="结束日"><DatePicker value={toDate} onChange={setToDate} /></Field>
         <Field label="合约数"><Input type="number" value={maxContracts} onChange={e => setMaxContracts(+e.target.value)} className="h-8 font-mono text-xs" /></Field>
         <Field label="每合约样本"><Input type="number" value={limitPerContract} onChange={e => setLimitPerContract(+e.target.value)} className="h-8 font-mono text-xs" /></Field>
         <Field label="Top N"><Input type="number" value={top} onChange={e => setTop(+e.target.value)} className="h-8 font-mono text-xs" /></Field>

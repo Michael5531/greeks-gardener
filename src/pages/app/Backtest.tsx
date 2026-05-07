@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -59,8 +60,8 @@ export default function Backtest() {
 
       <div className="rounded-lg border border-border bg-card/40 p-4 grid md:grid-cols-7 gap-3">
         <Field label="标的"><Input className="font-mono" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} /></Field>
-        <Field label="开始日期"><Input type="date" className="font-mono" value={start} onChange={e => setStart(e.target.value)} /></Field>
-        <Field label="结束日期"><Input type="date" className="font-mono" value={end} onChange={e => setEnd(e.target.value)} /></Field>
+        <Field label="开始日期"><DatePicker value={start} onChange={setStart} /></Field>
+        <Field label="结束日期"><DatePicker value={end} onChange={setEnd} /></Field>
         <Field label="策略">
           <Select value={strategy} onValueChange={setStrategy}>
             <SelectTrigger className="font-mono"><SelectValue /></SelectTrigger>

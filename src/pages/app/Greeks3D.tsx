@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Line, Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -107,8 +107,7 @@ function Surface({ strikes, exps, grid }: { strikes: number[]; exps: string[]; g
 }
 
 export default function Greeks3D() {
-  const [params, setParams] = useSearchParams();
-  const ticker = params.get("ticker") ?? "";
+  const [ticker, setTicker] = useSelectedTicker();
   const { data: baseData, loading, error, expirations } = useOptionsChain(ticker || null);
   const { quote: liveQuote } = useLiveQuote(ticker || null, 4000);
 
@@ -291,7 +290,7 @@ export default function Greeks3D() {
           <h1 className="text-2xl font-semibold tracking-tight">期权 OI 曲面</h1>
           <p className="text-sm text-muted-foreground">X = Strike · Z = 到期 · Y = 未平仓量 · 颜色 = IV</p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
+        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       {ticker && expirations.length > 0 && (

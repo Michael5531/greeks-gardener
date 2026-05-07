@@ -6,12 +6,17 @@ import { toast } from "sonner";
 import { X, TrendingUp, TrendingDown } from "lucide-react";
 import { getSnapshot } from "@/lib/polygon";
 import { Link } from "react-router-dom";
+import { useT } from "@/i18n";
+import HeroTicker from "@/components/HeroTicker";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 
 type WL = { id: string; ticker: string };
 
 export default function Dashboard() {
   const [items, setItems] = useState<WL[]>([]);
   const [snaps, setSnaps] = useState<Record<string, any>>({});
+  const t = useT();
+  const [selectedTicker, setSelectedTicker] = useSelectedTicker();
 
   async function load() {
     const { data, error } = await supabase.from("watchlist").select("id, ticker").order("created_at", { ascending: false });
@@ -35,8 +40,9 @@ export default function Dashboard() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { error } = await supabase.from("watchlist").insert({ ticker, user_id: user.id });
-    if (error) return toast.error(error.message);
-    toast.success(`${ticker} 已加入自选`);
+    if (error && !error.message.includes("duplicate")) return toast.error(error.message);
+    setSelectedTicker(ticker);
+    toast.success(ticker);
     load();
   }
   async function remove(id: string) {
@@ -47,9 +53,11 @@ export default function Dashboard() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">概览</h1>
-        <p className="text-sm text-muted-foreground">管理自选标的，快速跳转到期权链与 Greeks 分析。</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.dashboard.title}</h1>
+        <p className="text-sm text-muted-foreground">{t.dashboard.subtitle}</p>
       </div>
+
+      {selectedTicker && <HeroTicker ticker={selectedTicker} />}
 
       <div className="max-w-xl">
         <TickerSearch onSelect={t => add(t.ticker)} />
@@ -58,7 +66,7 @@ export default function Dashboard() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {items.length === 0 && (
           <div className="col-span-full p-8 rounded-lg border border-dashed border-border text-center text-sm text-muted-foreground">
-            自选为空，搜索股票添加。
+            {t.dashboard.empty}
           </div>
         )}
         {items.map(it => {
@@ -68,14 +76,19 @@ export default function Dashboard() {
           const chg = s?.todaysChange ?? 0;
           const chgPct = s?.todaysChangePerc ?? 0;
           const up = chg >= 0;
+          const active = selectedTicker === it.ticker;
           return (
-            <div key={it.id} className="rounded-lg border border-border bg-card/50 p-4 group hover:border-primary/40 transition-colors">
+            <div
+              key={it.id}
+              onClick={() => setSelectedTicker(it.ticker)}
+              className={`rounded-lg border bg-card/50 p-4 group hover:border-primary/60 transition-colors cursor-pointer ${active ? "border-primary ring-1 ring-primary/40" : "border-border"}`}
+            >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="font-mono font-bold text-lg">{it.ticker}</div>
                   <div className="text-xs text-muted-foreground">{s?.day?.v ? `Vol ${(s.day.v/1e6).toFixed(1)}M` : "—"}</div>
                 </div>
-                <button onClick={() => remove(it.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
+                <button onClick={(e) => { e.stopPropagation(); remove(it.id); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -88,9 +101,9 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-              <div className="mt-4 flex gap-2">
-                <Link to={`/app/chain?ticker=${it.ticker}`}><Button size="sm" variant="secondary">期权链</Button></Link>
-                <Link to={`/app/greeks?ticker=${it.ticker}`}><Button size="sm" variant="ghost">3D Greeks</Button></Link>
+              <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                <Link to={`/app/chain?ticker=${it.ticker}`} onClick={() => setSelectedTicker(it.ticker)}><Button size="sm" variant="secondary">{t.dashboard.openChain}</Button></Link>
+                <Link to={`/app/greeks?ticker=${it.ticker}`} onClick={() => setSelectedTicker(it.ticker)}><Button size="sm" variant="ghost">{t.dashboard.open3D}</Button></Link>
               </div>
             </div>
           );

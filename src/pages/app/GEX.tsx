@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import TickerSearch from "@/components/TickerSearch";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { getOptionsChain } from "@/lib/polygon";
 import { fmt } from "@/lib/optionUtils";
@@ -13,10 +13,19 @@ import { Sparkles, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import DTEStackedChart, { buildExpColors } from "@/components/charts/DTEStackedChart";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+function AIMarkdown({ text }: { text: string }) {
+  return (
+    <div className="prose prose-invert prose-sm max-w-none max-h-[600px] overflow-auto">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
 
 export default function GEX() {
-  const [params, setParams] = useSearchParams();
-  const ticker = params.get("ticker") ?? "";
+  const [ticker, setTicker] = useSelectedTicker();
   const { data: baseData, expirations, loading } = useOptionsChain(ticker || null);
   const [selectedExps, setSelectedExps] = useState<string[]>([]);
   const [extraData, setExtraData] = useState<Record<string, any[]>>({});
@@ -230,7 +239,7 @@ export default function GEX() {
               <TabsTrigger value="oi" className="text-xs font-mono">OI</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
+          <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
         </div>
       </div>
 
@@ -330,7 +339,7 @@ export default function GEX() {
           </Button>
         </div>
         {aiText ? (
-          <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed text-foreground/90 max-h-[600px] overflow-auto">{aiText}</pre>
+          <AIMarkdown text={aiText} />
         ) : (
           <div className="text-xs text-muted-foreground py-8 text-center">
             {strikePivot.length ? "点击右上角运行 AI 分析" : "请先选择标的并加载数据"}

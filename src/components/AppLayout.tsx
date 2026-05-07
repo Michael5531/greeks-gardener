@@ -4,21 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Activity, BarChart3, Boxes, History, Layers, LayoutDashboard, LineChart, LogOut, Radar, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MarketStatusBar from "./MarketStatusBar";
-
-const nav = [
-  { to: "/app", label: "概览", icon: LayoutDashboard, end: true },
-  { to: "/app/chain", label: "期权链", icon: Boxes },
-  { to: "/app/greeks", label: "3D Greeks", icon: Activity },
-  { to: "/app/gex", label: "GEX 分析", icon: BarChart3 },
-  { to: "/app/orderbook", label: "实时盘口", icon: Layers },
-  { to: "/app/flow", label: "历史期权流", icon: History },
-  { to: "/app/backtest", label: "回测", icon: LineChart },
-  { to: "/app/signals", label: "信号", icon: Radar },
-];
+import GlobalAIChat from "./GlobalAIChat";
+import { useT } from "@/i18n";
 
 export default function AppLayout() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const t = useT();
+  const nav = [
+    { to: "/app", label: t.nav.dashboard, icon: LayoutDashboard, end: true },
+    { to: "/app/chain", label: t.nav.chain, icon: Boxes },
+    { to: "/app/greeks", label: t.nav.greeks, icon: Activity },
+    { to: "/app/gex", label: t.nav.gex, icon: BarChart3 },
+    { to: "/app/orderbook", label: t.nav.orderbook, icon: Layers },
+    { to: "/app/flow", label: t.nav.flow, icon: History },
+    { to: "/app/backtest", label: t.nav.backtest, icon: LineChart },
+    { to: "/app/signals", label: t.nav.signals, icon: Radar },
+  ];
 
   return (
     <div className="min-h-screen flex">
@@ -54,13 +56,14 @@ export default function AppLayout() {
           <div className="px-3 py-2 text-xs text-muted-foreground truncate font-mono">{user?.email}</div>
           <Button variant="ghost" size="sm" className="w-full justify-start gap-2"
             onClick={async () => { await signOut(); navigate("/auth"); }}>
-            <LogOut className="h-4 w-4" /> 登出
+            <LogOut className="h-4 w-4" /> {t.nav.logout}
           </Button>
         </div>
       </aside>
       <main className="flex-1 min-w-0 overflow-x-hidden">
         <MarketStatusBar />
         <Outlet />
+        <GlobalAIChat />
       </main>
     </div>
   );

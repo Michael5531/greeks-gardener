@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.analyze-gex]
 verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.historical-flow]
+verify_jwt = false

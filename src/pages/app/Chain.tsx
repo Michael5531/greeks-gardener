@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import TickerSearch from "@/components/TickerSearch";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt, fmtPct } from "@/lib/optionUtils";
 
 export default function Chain() {
-  const [params, setParams] = useSearchParams();
-  const ticker = params.get("ticker") ?? "";
+  const [ticker, setTicker] = useSelectedTicker();
   const [exp, setExp] = useState<string | undefined>();
   const { data, loading, error, expirations } = useOptionsChain(ticker || null, exp);
 
@@ -67,7 +66,7 @@ export default function Chain() {
             {spot != null && <span className="ml-2 font-mono text-primary">${fmt(spot)}</span>}
           </p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
+        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       {ticker && (

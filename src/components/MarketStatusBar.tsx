@@ -1,15 +1,10 @@
-import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { computeSessionET, useLiveQuote, type MarketSession } from "@/hooks/useLiveQuote";
 import { cn } from "@/lib/utils";
 import { Activity } from "lucide-react";
-
-const sessionLabel: Record<MarketSession, string> = {
-  pre: "盘前",
-  regular: "盘中",
-  after: "盘后",
-  closed: "休市",
-};
+import { useT } from "@/i18n";
+import LanguageSwitcher from "./LanguageSwitcher";
+import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 
 const sessionTone: Record<MarketSession, string> = {
   pre: "bg-accent/15 text-accent border-accent/30",
@@ -28,11 +23,12 @@ function useETClock() {
 }
 
 export default function MarketStatusBar() {
-  const [params] = useSearchParams();
-  const ticker = params.get("ticker");
+  const t = useT();
+  const [ticker] = useSelectedTicker();
   const now = useETClock();
   const session = useMemo(() => computeSessionET(now), [now]);
-  const { quote } = useLiveQuote(ticker, session === "regular" ? 3000 : session === "closed" ? 30000 : 8000);
+  const { quote } = useLiveQuote(ticker || null, session === "regular" ? 3000 : session === "closed" ? 30000 : 8000);
+  const sessionLabel: Record<MarketSession, string> = { pre: t.market.pre, regular: t.market.regular, after: t.market.after, closed: t.market.closed };
 
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
@@ -78,7 +74,8 @@ export default function MarketStatusBar() {
             <Activity className="h-3 w-3 text-muted-foreground" />
           </div>
         )}
-        {!ticker && <div className="ml-auto text-muted-foreground">未选择标的</div>}
+        {!ticker && <div className="ml-auto text-muted-foreground">{t.market.noTicker}</div>}
+        <div className={cn(ticker ? "" : "")}><LanguageSwitcher /></div>
       </div>
     </div>
   );
