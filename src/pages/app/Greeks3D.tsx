@@ -442,7 +442,7 @@ function DTEStackedChart({
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
-        <XAxis dataKey={xKey} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+        <XAxis dataKey={xKey} type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
         <Tooltip
           contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}
