@@ -48,7 +48,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = req.method === "POST" ? await req.json() : {};
+    let body: any = {};
+    if (req.method === "POST") {
+      try {
+        const text = await req.text();
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = {};
+      }
+    }
     const url = new URL(req.url);
     const action = body.action ?? url.searchParams.get("action");
     const ttl = TTL_MS[action] ?? 10_000;
