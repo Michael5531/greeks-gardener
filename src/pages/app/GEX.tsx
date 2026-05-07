@@ -13,7 +13,7 @@ export default function GEX() {
   const [params, setParams] = useSearchParams();
   const ticker = params.get("ticker") ?? "";
   const [exp, setExp] = useState<string | undefined>();
-  const { data, expirations, loading } = useOptionsChain(ticker || null);
+  const { data, expirations, loading } = useOptionsChain(ticker || null, exp);
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
