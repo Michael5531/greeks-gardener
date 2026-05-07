@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import TickerSearch from "@/components/TickerSearch";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
-import { getOptionQuotes, getOptionTrades, getOptionsChain } from "@/lib/polygon";
+import { getOptionQuotes, getOptionTrades, getOptionsChain, getOptionSnapshotSingle } from "@/lib/polygon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
@@ -56,6 +56,7 @@ export default function Orderbook() {
 
   const [quotes, setQuotes] = useState<any[]>([]);
   const [trades, setTrades] = useState<any[]>([]);
+  const [snap, setSnap] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const lastErrRef = useRef<string | null>(null);
 
@@ -68,16 +69,17 @@ export default function Orderbook() {
     const since = Date.now() - windowMin * 60_000;
     const sinceNs = since * 1_000_000;
     try {
-      const [q, t] = await Promise.all([
+      const [q, t, s] = await Promise.all([
         getOptionQuotes(optionTicker, { gte: sinceNs, limit: 5000, order: "desc" }),
         getOptionTrades(optionTicker, sinceNs, 5000),
+        getOptionSnapshotSingle(ticker!, optionTicker).catch(() => null),
       ]);
-      setQuotes(q); setTrades(t); lastErrRef.current = null;
+      setQuotes(q); setTrades(t); setSnap(s); lastErrRef.current = null;
     } catch (e: any) { lastErrRef.current = e.message; }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { setQuotes([]); setTrades([]); }, [optionTicker]);
+  useEffect(() => { setQuotes([]); setTrades([]); setSnap(null); }, [optionTicker]);
   useInterval(fetchData, live ? 4000 : 30000, { enabled: !!optionTicker });
 
   const quotePoints: HeatPoint[] = useMemo(() => {
@@ -154,12 +156,54 @@ export default function Orderbook() {
 
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <div className="text-sm font-semibold mb-2">Quotes 深度热力图 <span className="text-xs text-muted-foreground ml-2">绿=bid 红=ask · 颜色越亮 size 越大</span></div>
-        <HeatmapCanvas points={quotePoints} width={1100} height={360} timeBinMs={Math.max(1000, windowMin * 60_000 / 220)} priceBin={0.05} colorMode="bidask" refPrice={mid} title={loading ? "loading…" : undefined} />
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-4">
+          <HeatmapCanvas points={quotePoints} width={900} height={360} timeBinMs={Math.max(1000, windowMin * 60_000 / 220)} priceBin={0.05} colorMode="bidask" refPrice={mid} title={loading ? "loading…" : undefined} />
+          <GreeksPanel snap={snap} quotes={quotes} trades={trades} />
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card/40 p-4">
-        <div className="text-sm font-semibold mb-2">Trades 成交热力图 <span className="text-xs text-muted-foreground ml-2">颜色越亮 成交量越大</span></div>
+        <div className="text-sm font-semibold mb-2">Trades 成交热力图 <span className="text-xs text-muted-foreground ml-2">颜色越亮 成交量越大 · 鼠标悬停查看详情</span></div>
         <HeatmapCanvas points={tradePoints} width={1100} height={300} timeBinMs={Math.max(1000, windowMin * 60_000 / 220)} priceBin={0.05} colorMode="single" refPrice={mid} />
+      </div>
+    </div>
+  );
+}
+
+function GreeksPanel({ snap, quotes, trades }: { snap: any; quotes: any[]; trades: any[] }) {
+  const g = snap?.greeks ?? {};
+  const iv = snap?.implied_volatility;
+  const oi = snap?.open_interest;
+  const day = snap?.day ?? {};
+  // Aggregate bid/ask pressure across the window
+  let bidSum = 0, askSum = 0;
+  for (const q of quotes) { bidSum += q.bid_size ?? 0; askSum += q.ask_size ?? 0; }
+  const totalSide = bidSum + askSum || 1;
+  const bidPct = (bidSum / totalSide) * 100;
+  const tradeVol = trades.reduce((a, t) => a + (t.size ?? 0), 0);
+  const Row = ({ k, v, tone }: { k: string; v: any; tone?: string }) => (
+    <div className="flex justify-between py-1 border-b border-border/40 last:border-0">
+      <span className="text-[11px] text-muted-foreground">{k}</span>
+      <span className={`text-xs font-mono ${tone ?? ""}`}>{v}</span>
+    </div>
+  );
+  const f = (x: any, d = 4) => (typeof x === "number" && isFinite(x) ? x.toFixed(d) : "—");
+  return (
+    <div className="rounded-md border border-border bg-background/40 p-3">
+      <div className="text-xs font-semibold mb-2">希腊字母 / 实时</div>
+      <Row k="Δ Delta" v={f(g.delta, 4)} />
+      <Row k="Γ Gamma" v={f(g.gamma, 5)} />
+      <Row k="Θ Theta" v={f(g.theta, 4)} />
+      <Row k="ν Vega" v={f(g.vega, 4)} />
+      <Row k="IV" v={iv != null ? `${(iv * 100).toFixed(2)}%` : "—"} />
+      <Row k="OI" v={oi != null ? oi.toLocaleString() : "—"} />
+      <Row k="日成交量" v={day?.volume != null ? day.volume.toLocaleString() : "—"} />
+      <div className="mt-2 pt-2 border-t border-border/60">
+        <div className="text-[11px] text-muted-foreground mb-1">窗口内压力</div>
+        <Row k="Bid 总量" v={bidSum.toLocaleString()} tone="text-bull" />
+        <Row k="Ask 总量" v={askSum.toLocaleString()} tone="text-bear" />
+        <Row k="买卖比" v={`${bidPct.toFixed(0)}% / ${(100 - bidPct).toFixed(0)}%`} />
+        <Row k="成交量合计" v={tradeVol.toLocaleString()} />
       </div>
     </div>
   );
