@@ -1,8 +1,7 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSelectedTicker } from "@/hooks/useSelectedTicker";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
-import { getOptionsChain } from "@/lib/polygon";
 import { Bar, BarChart, CartesianGrid, Legend, Line as RLine, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt } from "@/lib/optionUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -11,19 +10,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { X, Plus } from "lucide-react";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
+import { useComputeIVSurface } from "@/hooks/useComputeIVSurface";
 
 export default function Greeks3D() {
   const [ticker, setTicker] = useSelectedTicker();
-  const { data: baseData, loading, error, expirations } = useOptionsChain(ticker || null);
+  const { loading: chainLoading, error, expirations } = useOptionsChain(ticker || null);
   const { quote: liveQuote } = useLiveQuote(ticker || null, 4000);
 
   // Selected expirations for charts (defaults to closest to +7/+14/+21d)
   const [selectedExps, setSelectedExps] = useState<string[]>([]);
-  // Cache scoped per-ticker so switching symbols never leaks stale contracts
-  const [extraDataAll, setExtraDataAll] = useState<Record<string, Record<string, any[]>>>({});
-  const extraData = (ticker && extraDataAll[ticker]) || {};
-
-  // Reset selected expirations when ticker changes (different chains, different dates)
   useEffect(() => { setSelectedExps([]); }, [ticker]);
 
   const pickClosestExp = (days: number, list: string[]): string | undefined => {
@@ -49,122 +44,24 @@ export default function Greeks3D() {
     setSelectedExps(Array.from(new Set(defaults)));
   }, [expirations]);
 
-  // Fetch chain for any selected expiration that we don't have yet (per-ticker cache)
-  useEffect(() => {
-    if (!ticker) return;
-    const baseForThisTicker = baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`));
-    const have = new Set(baseForThisTicker.map(d => d.details?.expiration_date).filter(Boolean));
-    const missing = selectedExps.filter(e => !have.has(e) && !extraData[e]);
-    if (!missing.length) return;
-    let cancelled = false;
-    const tk = ticker;
-    Promise.all(missing.map(async e => {
-      try { const r = await getOptionsChain(tk, e); return [e, r as any[]] as const; }
-      catch { return [e, [] as any[]] as const; }
-    })).then(results => {
-      if (cancelled) return;
-      setExtraDataAll(prev => {
-        const bucket = { ...(prev[tk] ?? {}) };
-        for (const [e, r] of results) bucket[e] = r;
-        return { ...prev, [tk]: bucket };
-      });
-    });
-    return () => { cancelled = true; };
-  }, [ticker, selectedExps, baseData]);
+  // Backend compute
+  const { data: surf, loading: surfLoading } = useComputeIVSurface(ticker, selectedExps);
+  const loading = chainLoading || surfLoading;
 
-  // Merge: base data + extra fetched data, then filter to selectedExps for charts
-  const data = useMemo(() => {
-    // Defensive: only keep rows whose option ticker matches the selected underlying
-    const baseFiltered = ticker
-      ? baseData.filter(d => d.details?.ticker?.startsWith(`O:${ticker}`))
-      : baseData;
-    if (!selectedExps.length) return baseFiltered;
-    const seen = new Set<string>();
-    const out: any[] = [];
-    const push = (d: any) => {
-      const k = `${d.details?.ticker}|${d.details?.strike_price}|${d.details?.expiration_date}|${d.details?.contract_type}`;
-      if (seen.has(k)) return;
-      seen.add(k); out.push(d);
-    };
-    for (const d of baseFiltered) {
-      if (selectedExps.includes(d.details?.expiration_date)) push(d);
-    }
-    for (const e of selectedExps) for (const d of (extraData[e] ?? [])) push(d);
-    return out;
-  }, [baseData, extraData, selectedExps, ticker]);
-
-  // Build IV smile data: rows = strike, columns = expiration IV (avg of call & put)
-  const { strikes, exps, ivCurve, total } = useMemo(() => {
-    const strikeSet = new Set<number>();
-    const expSet = new Set<string>();
-    const acc = new Map<string, { sum: number; n: number }>();
-    let total = 0;
-    for (const d of data) {
-      const k = d.details?.strike_price; const e = d.details?.expiration_date;
-      if (k == null || !e) continue;
-      strikeSet.add(k); expSet.add(e); total++;
-      const iv = d.implied_volatility;
-      if (typeof iv === "number" && iv > 0 && iv < 5) {
-        const key = `${k}|${e}`;
-        const r = acc.get(key) ?? { sum: 0, n: 0 };
-        r.sum += iv; r.n += 1; acc.set(key, r);
-      }
-    }
-    const strikes = Array.from(strikeSet).sort((a, b) => a - b);
-    const exps = Array.from(expSet).sort();
-    const ivCurve = strikes.map(s => {
-      const row: any = { strike: s };
-      for (const e of exps) {
-        const r = acc.get(`${s}|${e}`);
-        row[e] = r && r.n ? +(r.sum / r.n * 100).toFixed(2) : null;
-      }
-      return row;
-    });
-    return { strikes, exps, ivCurve, total };
-  }, [data]);
-
+  const strikes = surf?.strikes ?? [];
+  const exps = surf?.exps ?? [];
+  const ivCurve = surf?.ivCurve ?? [];
+  const total = surf?.total ?? 0;
   const ready = strikes.length > 1 && exps.length > 0;
-
-  // CALL/PUT 拆分聚合
-  const { byStrike, byExp, totals } = useMemo(() => {
-    const sMap = new Map<number, { strike: number; callOI: number; putOI: number; callVol: number; putVol: number }>();
-    const eMap = new Map<string, { exp: string; callOI: number; putOI: number; callVol: number; putVol: number }>();
-    let cOI = 0, pOI = 0, cV = 0, pV = 0;
-    for (const d of data) {
-      const k = d.details?.strike_price;
-      const e = d.details?.expiration_date;
-      const isCall = d.details?.contract_type === "call";
-      const oi = d.open_interest ?? 0;
-      const vol = d.day?.volume ?? 0;
-      if (k != null) {
-        const r = sMap.get(k) ?? { strike: k, callOI: 0, putOI: 0, callVol: 0, putVol: 0 };
-        if (isCall) { r.callOI += oi; r.callVol += vol; } else { r.putOI += oi; r.putVol += vol; }
-        sMap.set(k, r);
-      }
-      if (e) {
-        const r = eMap.get(e) ?? { exp: e, callOI: 0, putOI: 0, callVol: 0, putVol: 0 };
-        if (isCall) { r.callOI += oi; r.callVol += vol; } else { r.putOI += oi; r.putVol += vol; }
-        eMap.set(e, r);
-      }
-      if (isCall) { cOI += oi; cV += vol; } else { pOI += oi; pV += vol; }
-    }
-    const byStrike = Array.from(sMap.values()).sort((a, b) => a.strike - b.strike);
-    const byExp = Array.from(eMap.values()).sort((a, b) => a.exp.localeCompare(b.exp));
-    return { byStrike, byExp, totals: { callOI: cOI, putOI: pOI, callVol: cV, putVol: pV } };
-  }, [data]);
+  const byStrike = surf?.byStrike ?? [];
+  const byExp = surf?.byExp ?? [];
+  const totals = surf?.totals ?? { callOI: 0, putOI: 0, callVol: 0, putVol: 0 };
+  const data = surf ? new Array(total) : []; // placeholder for "data.length > 0" guard
 
   const pcrOI = totals.callOI ? totals.putOI / totals.callOI : 0;
   const pcrVol = totals.callVol ? totals.putVol / totals.callVol : 0;
 
-  // underlying price (from any contract that carries it)
-  const underlyingPrice = useMemo(() => {
-    if (liveQuote?.price != null) return liveQuote.price;
-    for (const d of data) {
-      const p = d.underlying_asset?.price;
-      if (p != null) return p as number;
-    }
-    return null;
-  }, [data, liveQuote?.price]);
+  const underlyingPrice = liveQuote?.price ?? surf?.spot ?? null;
 
   // Per-DTE pivot: rows = strike, one numeric column per selected expiration
   const expColors = useMemo(() => {
@@ -175,34 +72,8 @@ export default function Greeks3D() {
     return map;
   }, [selectedExps]);
 
-  const { strikePivotOI, strikePivotVol } = useMemo(() => {
-    const oi = new Map<number, any>();
-    const vol = new Map<number, any>();
-    for (const d of data) {
-      const k = d.details?.strike_price;
-      const e = d.details?.expiration_date;
-      if (k == null || !e || !selectedExps.includes(e)) continue;
-      const isCall = d.details?.contract_type === "call";
-      const oiRow = oi.get(k) ?? { strike: k };
-      const vRow = vol.get(k) ?? { strike: k };
-      const oiVal = d.open_interest ?? 0;
-      const volVal = d.day?.volume ?? 0;
-      // calls are positive (above axis), puts negative (below axis)
-      if (isCall) {
-        oiRow[`${e}__c`] = (oiRow[`${e}__c`] ?? 0) + oiVal;
-        vRow[`${e}__c`] = (vRow[`${e}__c`] ?? 0) + volVal;
-      } else {
-        oiRow[`${e}__p`] = (oiRow[`${e}__p`] ?? 0) - oiVal;
-        vRow[`${e}__p`] = (vRow[`${e}__p`] ?? 0) - volVal;
-      }
-      oi.set(k, oiRow);
-      vol.set(k, vRow);
-    }
-    return {
-      strikePivotOI: Array.from(oi.values()).sort((a, b) => a.strike - b.strike),
-      strikePivotVol: Array.from(vol.values()).sort((a, b) => a.strike - b.strike),
-    };
-  }, [data, selectedExps]);
+  const strikePivotOI = surf?.strikePivotOI ?? [];
+  const strikePivotVol = surf?.strikePivotVol ?? [];
 
   return (
     <div className="p-6 space-y-4">
