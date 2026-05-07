@@ -30,6 +30,11 @@ export async function getOptionsContracts(ticker: string, expiration_date?: stri
   return data.results ?? [];
 }
 
+export async function getOptionsExpirations(ticker: string): Promise<string[]> {
+  const data = await callPolygon<{ results?: string[] }>("options-expirations", { ticker });
+  return data.results ?? [];
+}
+
 export async function getStockBars(ticker: string, from: string, to: string) {
   const data = await callPolygon<{ results?: any[] }>("stock-aggregates", { ticker, from, to });
   return data.results ?? [];
