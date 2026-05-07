@@ -13,6 +13,13 @@ import OptionPricer from "@/components/OptionPricer";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 
+function isCallTicker(t?: string) {
+  if (!t) return false;
+  // OCC: O:UNDERYYMMDD[C|P]00000000  -> check the C/P after the 6-digit date
+  const m = /[A-Z](\d{6})([CP])\d{8}$/.exec(t);
+  return m ? m[2] === "C" : false;
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
 const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
 
