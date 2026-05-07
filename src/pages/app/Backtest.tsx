@@ -10,6 +10,8 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { fmt, fmtPct } from "@/lib/optionUtils";
 import { STRATEGIES, getStrategy } from "@/lib/strategies";
 import StrategyCard from "@/components/StrategyCard";
+import { getOptionsChain, getSnapshot } from "@/lib/polygon";
+import { useEffect as useEffect2 } from "react";
 
 export default function Backtest() {
   const [ticker, setTicker] = useState("AAPL");
@@ -22,6 +24,9 @@ export default function Backtest() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [spot, setSpot] = useState<number | null>(null);
+  const [atmIv, setAtmIv] = useState<number | null>(null);
+  const [pulling, setPulling] = useState(false);
 
   const def = getStrategy(strategy);
 
@@ -30,6 +35,38 @@ export default function Backtest() {
     setHistory(data ?? []);
   }
   useEffect(() => { loadHistory(); }, []);
+
+  // Pull live spot + ATM IV whenever ticker changes
+  async function pullLive(t: string) {
+    if (!t) return;
+    setPulling(true);
+    try {
+      const snap = await getSnapshot(t);
+      const s = snap?.lastTrade?.p ?? snap?.day?.c ?? null;
+      setSpot(s);
+      const chain = await getOptionsChain(t);
+      if (s && chain.length) {
+        // closest-to-spot, prefer DTE near `dte`, mix calls+puts
+        const target = Date.now() + dte * 86400000;
+        const sorted = chain
+          .filter((c: any) => c.implied_volatility != null && c.details?.strike_price != null)
+          .map((c: any) => ({
+            iv: c.implied_volatility,
+            k: c.details.strike_price,
+            expMs: Date.parse(c.details.expiration_date + "T00:00:00Z"),
+          }))
+          .sort((a: any, b: any) =>
+            (Math.abs(a.k - s) + Math.abs(a.expMs - target) / 1e8) -
+            (Math.abs(b.k - s) + Math.abs(b.expMs - target) / 1e8)
+          );
+        const ivPick = sorted[0]?.iv ?? null;
+        if (ivPick) { setAtmIv(ivPick); setIv(+ivPick.toFixed(4)); }
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "拉取实时数据失败");
+    } finally { setPulling(false); }
+  }
+  useEffect2(() => { pullLive(ticker); /* eslint-disable-next-line */ }, [ticker]);
 
   async function run() {
     if (!def.engineSupported) {
@@ -59,7 +96,9 @@ export default function Backtest() {
       </div>
 
       <div className="rounded-lg border border-border bg-card/40 p-4 grid md:grid-cols-7 gap-3">
-        <Field label="标的"><Input className="font-mono" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} /></Field>
+        <Field label={`标的${spot != null ? ` · $${spot.toFixed(2)}` : ""}`}>
+          <Input className="font-mono" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} />
+        </Field>
         <Field label="开始日期"><DatePicker value={start} onChange={setStart} /></Field>
         <Field label="结束日期"><DatePicker value={end} onChange={setEnd} /></Field>
         <Field label="策略">
@@ -74,7 +113,14 @@ export default function Backtest() {
         </Field>
         <Field label="DTE"><Input type="number" className="font-mono" value={dte} onChange={e => setDte(+e.target.value)} /></Field>
         <Field label="目标 |Δ|"><Input type="number" step="0.05" className="font-mono" value={delta} onChange={e => setDelta(+e.target.value)} /></Field>
-        <Field label="假定 IV"><Input type="number" step="0.05" className="font-mono" value={iv} onChange={e => setIv(+e.target.value)} /></Field>
+        <Field label={`假定 IV${atmIv != null ? ` · ATM ${(atmIv*100).toFixed(1)}%` : ""}`}>
+          <div className="flex gap-1">
+            <Input type="number" step="0.05" className="font-mono" value={iv} onChange={e => setIv(+e.target.value)} />
+            <Button type="button" variant="outline" size="sm" className="px-2 text-[10px]" disabled={pulling || !ticker} onClick={() => pullLive(ticker)} title="拉取实时 ATM IV">
+              {pulling ? "…" : "实时"}
+            </Button>
+          </div>
+        </Field>
         <div className="md:col-span-7 flex justify-end">
           <Button onClick={run} disabled={running || !def.engineSupported} className="glow" title={!def.engineSupported ? "此策略暂不支持引擎回测" : ""}>
             {running ? "运行中…" : def.engineSupported ? "运行回测" : "暂不支持回测"}
