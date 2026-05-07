@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.run-backtest]
 verify_jwt = false
+
+[functions.analyze-gex]
+verify_jwt = false
