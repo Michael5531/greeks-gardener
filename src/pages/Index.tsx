@@ -23,7 +23,7 @@ export default function Index() {
           <div className="h-9 w-9 rounded-md grid place-items-center" style={{ background: "var(--gradient-primary)" }}>
             <TrendingUp className="h-5 w-5 text-background" />
           </div>
-          <div className="font-semibold tracking-tight text-lg">OPTIX</div>
+          <div className="font-semibold tracking-tight text-lg">OPTI-X</div>
         </div>
         <Link to="/auth"><Button variant="outline" size="sm">登录 / 注册</Button></Link>
       </header>
@@ -60,7 +60,7 @@ export default function Index() {
       </section>
 
       <footer className="relative z-10 border-t border-border py-6 text-center text-xs text-muted-foreground font-mono">
-        OPTIX · 仅信号研究平台，不构成投资建议
+        OPTI-X · 仅信号研究平台，不构成投资建议
       </footer>
     </div>
   );

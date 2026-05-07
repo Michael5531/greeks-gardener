@@ -31,7 +31,7 @@ export default function AppLayout() {
               <TrendingUp className="h-4 w-4 text-background" />
             </div>
             <div>
-              <div className="font-semibold tracking-tight">OPTIX</div>
+              <div className="font-semibold tracking-tight">OPTI-X</div>
               <div className="text-[10px] text-muted-foreground font-mono">OPTIONS · v0.1</div>
             </div>
           </div>

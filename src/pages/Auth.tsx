@@ -53,7 +53,7 @@ export default function AuthPage() {
           <div className="h-9 w-9 rounded-md grid place-items-center" style={{ background: "var(--gradient-primary)" }}>
             <TrendingUp className="h-5 w-5 text-background" />
           </div>
-          <div className="font-semibold tracking-tight">OPTIX</div>
+          <div className="font-semibold tracking-tight">OPTI-X</div>
         </div>
         <Tabs defaultValue="signin">
           <TabsList className="grid grid-cols-2 mb-4 w-full">
