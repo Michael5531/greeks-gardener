@@ -101,7 +101,7 @@ const ChartTooltipContent = React.forwardRef<
     }
 >(
   (
-    ({
+    {
       active,
       payload,
       className,
@@ -115,7 +115,7 @@ const ChartTooltipContent = React.forwardRef<
       color,
       nameKey,
       labelKey,
-    }: any),
+    }: any,
     ref,
   ) => {
     const { config } = useChart();
