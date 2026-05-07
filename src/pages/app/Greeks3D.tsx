@@ -235,10 +235,30 @@ function Section({ title, subtitle, children, tall }: { title: string; subtitle?
   );
 }
 
+function ChartSizer({ children }: { children: (size: { width: number; height: number }) => React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 320, height: 320 });
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      setSize({ width: Math.max(1, Math.floor(rect.width)), height: Math.max(1, Math.floor(rect.height)) });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return <div ref={ref} className="h-full w-full min-h-0 min-w-0">{children(size)}</div>;
+}
+
 function StackedChart({ data, xKey, aKey, bKey }: { data: any[]; xKey: string; aKey: string; bKey: string }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+    <ChartSizer>
+      {({ width, height }) => <BarChart width={width} height={height} data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis dataKey={xKey} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
         <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
@@ -249,8 +269,8 @@ function StackedChart({ data, xKey, aKey, bKey }: { data: any[]; xKey: string; a
         <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v) => v.startsWith("call") ? "Call" : "Put"} />
         <Bar dataKey={aKey} stackId="s" fill="hsl(var(--bull))" />
         <Bar dataKey={bKey} stackId="s" fill="hsl(var(--bear))" />
-      </BarChart>
-    </ResponsiveContainer>
+      </BarChart>}
+    </ChartSizer>
   );
 }
 
