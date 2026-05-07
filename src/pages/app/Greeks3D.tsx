@@ -5,8 +5,14 @@ import { OrbitControls, Line, Text } from "@react-three/drei";
 import * as THREE from "three";
 import TickerSearch from "@/components/TickerSearch";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
+import { getOptionsChain } from "@/lib/polygon";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmt } from "@/lib/optionUtils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { X, Plus } from "lucide-react";
 
 function Axes({ size = 5 }: { size?: number }) {
   const L = size;
@@ -102,7 +108,72 @@ function Surface({ strikes, exps, grid }: { strikes: number[]; exps: string[]; g
 export default function Greeks3D() {
   const [params, setParams] = useSearchParams();
   const ticker = params.get("ticker") ?? "";
-  const { data, loading, error } = useOptionsChain(ticker || null);
+  const { data: baseData, loading, error, expirations } = useOptionsChain(ticker || null);
+
+  // Selected expirations for charts (defaults to closest to +7/+14/+21d)
+  const [selectedExps, setSelectedExps] = useState<string[]>([]);
+  const [extraData, setExtraData] = useState<Record<string, any[]>>({});
+
+  const pickClosestExp = (days: number, list: string[]): string | undefined => {
+    if (!list.length) return undefined;
+    const target = new Date();
+    target.setDate(target.getDate() + days);
+    const t = target.getTime();
+    let best = list[0];
+    let bestDiff = Math.abs(new Date(best).getTime() - t);
+    for (const e of list) {
+      const d = Math.abs(new Date(e).getTime() - t);
+      if (d < bestDiff) { bestDiff = d; best = e; }
+    }
+    return best;
+  };
+
+  // Initialize defaults when expirations arrive
+  useEffect(() => {
+    if (!expirations.length) { setSelectedExps([]); return; }
+    const defaults = [7, 14, 21]
+      .map(d => pickClosestExp(d, expirations))
+      .filter((x): x is string => !!x);
+    setSelectedExps(Array.from(new Set(defaults)));
+  }, [expirations]);
+
+  // Fetch chain for any selected expiration that we don't have yet
+  useEffect(() => {
+    if (!ticker) return;
+    const have = new Set(baseData.map(d => d.details?.expiration_date).filter(Boolean));
+    const missing = selectedExps.filter(e => !have.has(e) && !extraData[e]);
+    if (!missing.length) return;
+    let cancelled = false;
+    Promise.all(missing.map(async e => {
+      try { const r = await getOptionsChain(ticker, e); return [e, r as any[]] as const; }
+      catch { return [e, [] as any[]] as const; }
+    })).then(results => {
+      if (cancelled) return;
+      setExtraData(prev => {
+        const next = { ...prev };
+        for (const [e, r] of results) next[e] = r;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [ticker, selectedExps, baseData, extraData]);
+
+  // Merge: base data + extra fetched data, then filter to selectedExps for charts
+  const data = useMemo(() => {
+    if (!selectedExps.length) return baseData;
+    const seen = new Set<string>();
+    const out: any[] = [];
+    const push = (d: any) => {
+      const k = `${d.details?.ticker}|${d.details?.strike_price}|${d.details?.expiration_date}|${d.details?.contract_type}`;
+      if (seen.has(k)) return;
+      seen.add(k); out.push(d);
+    };
+    for (const d of baseData) {
+      if (selectedExps.includes(d.details?.expiration_date)) push(d);
+    }
+    for (const e of selectedExps) for (const d of (extraData[e] ?? [])) push(d);
+    return out;
+  }, [baseData, extraData, selectedExps]);
 
   const { strikes, exps, grid, total } = useMemo(() => {
     const strikeSet = new Set<number>();
@@ -172,6 +243,58 @@ export default function Greeks3D() {
         </div>
         <div className="w-72"><TickerSearch onSelect={t => setParams({ ticker: t.ticker })} /></div>
       </div>
+
+      {ticker && expirations.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">到期日:</span>
+          {selectedExps.map(e => (
+            <Badge key={e} variant="secondary" className="font-mono gap-1 pr-1">
+              {e}
+              <button
+                onClick={() => setSelectedExps(prev => prev.filter(x => x !== e))}
+                className="hover:bg-muted rounded p-0.5"
+                aria-label={`移除 ${e}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 font-mono">
+                <Plus className="h-3 w-3 mr-1" /> 添加
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-2 max-h-80 overflow-auto">
+              <div className="space-y-1">
+                {expirations.map(e => {
+                  const checked = selectedExps.includes(e);
+                  return (
+                    <label key={e} className="flex items-center gap-2 text-sm font-mono px-2 py-1 rounded hover:bg-muted cursor-pointer">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(c) => {
+                          setSelectedExps(prev =>
+                            c ? Array.from(new Set([...prev, e])).sort() : prev.filter(x => x !== e)
+                          );
+                        }}
+                      />
+                      {e}
+                    </label>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button variant="ghost" size="sm" className="h-7 text-xs"
+            onClick={() => {
+              const defaults = [7, 14, 21].map(d => pickClosestExp(d, expirations)).filter((x): x is string => !!x);
+              setSelectedExps(Array.from(new Set(defaults)));
+            }}>
+            重置默认
+          </Button>
+        </div>
+      )}
 
       <div className="rounded-lg border border-border bg-card/30 h-[640px] relative overflow-hidden">
         {!ticker && <div className="absolute inset-0 grid place-items-center text-muted-foreground">请先搜索标的</div>}
