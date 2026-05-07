@@ -1,4 +1,5 @@
-import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import ChartSizer from "./ChartSizer";
 
 export function fmtK(n: number) {
   const a = Math.abs(n);
@@ -38,8 +39,9 @@ export default function DTEStackedChart({
   refLines?: { x: number; label: string; color?: string }[];
 }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 32 }} stackOffset="sign" barCategoryGap="8%">
+    <ChartSizer>
+      {({ width, height }) => (
+      <BarChart width={width} height={height} data={data} margin={{ top: 12, right: 12, left: 0, bottom: 32 }} stackOffset="sign" barCategoryGap="8%">
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis
           dataKey={xKey}
@@ -89,6 +91,7 @@ export default function DTEStackedChart({
           />
         ))}
       </BarChart>
-    </ResponsiveContainer>
+      )}
+    </ChartSizer>
   );
 }
