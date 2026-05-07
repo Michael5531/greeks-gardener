@@ -259,11 +259,20 @@ export default function Greeks3D() {
       const k = d.details?.strike_price;
       const e = d.details?.expiration_date;
       if (k == null || !e || !selectedExps.includes(e)) continue;
+      const isCall = d.details?.contract_type === "call";
       const oiRow = oi.get(k) ?? { strike: k };
-      oiRow[e] = (oiRow[e] ?? 0) + (d.open_interest ?? 0);
-      oi.set(k, oiRow);
       const vRow = vol.get(k) ?? { strike: k };
-      vRow[e] = (vRow[e] ?? 0) + (d.day?.volume ?? 0);
+      const oiVal = d.open_interest ?? 0;
+      const volVal = d.day?.volume ?? 0;
+      // calls are positive (above axis), puts negative (below axis)
+      if (isCall) {
+        oiRow[`${e}__c`] = (oiRow[`${e}__c`] ?? 0) + oiVal;
+        vRow[`${e}__c`] = (vRow[`${e}__c`] ?? 0) + volVal;
+      } else {
+        oiRow[`${e}__p`] = (oiRow[`${e}__p`] ?? 0) - oiVal;
+        vRow[`${e}__p`] = (vRow[`${e}__p`] ?? 0) - volVal;
+      }
+      oi.set(k, oiRow);
       vol.set(k, vRow);
     }
     return {
@@ -368,7 +377,7 @@ export default function Greeks3D() {
             <Stat label="Expiries" value={String(byExp.length)} />
           </div>
 
-          <Section title="未平仓量 OI · 按行权价" subtitle="不同到期日叠加显示">
+          <Section title="未平仓量 OI · 按行权价" subtitle="Call 在上 / Put 在下 · 不同到期日叠加" tall>
             <DTEStackedChart data={strikePivotOI} xKey="strike" exps={[...selectedExps].sort()} colors={expColors} refX={underlyingPrice} />
           </Section>
 
@@ -376,7 +385,7 @@ export default function Greeks3D() {
             <StackedChart data={byExp} xKey="exp" aKey="callOI" bKey="putOI" />
           </Section>
 
-          <Section title="成交量 Volume · 按行权价" subtitle="不同到期日叠加显示">
+          <Section title="成交量 Volume · 按行权价" subtitle="Call 在上 / Put 在下 · 不同到期日叠加" tall>
             <DTEStackedChart data={strikePivotVol} xKey="strike" exps={[...selectedExps].sort()} colors={expColors} refX={underlyingPrice} />
           </Section>
 
@@ -404,14 +413,14 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "bu
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Section({ title, subtitle, children, tall }: { title: string; subtitle?: string; children: React.ReactNode; tall?: boolean }) {
   return (
     <div className="rounded-lg border border-border bg-card/40 p-4">
       <div className="flex items-baseline justify-between mb-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         {subtitle && <span className="text-[11px] text-muted-foreground">{subtitle}</span>}
       </div>
-      <div className="h-72">{children}</div>
+      <div className={tall ? "h-[460px]" : "h-72"}>{children}</div>
     </div>
   );
 }
@@ -440,17 +449,28 @@ function DTEStackedChart({
 }: { data: any[]; xKey: string; exps: string[]; colors: Record<string, string>; refX: number | null }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }}>
+      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 24 }} stackOffset="sign" barCategoryGap={1}>
         <CartesianGrid stroke="hsl(var(--grid-line))" vertical={false} />
         <XAxis dataKey={xKey} type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
-        <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(v)} />
+        <YAxis tick={{ fontSize: 11, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => fmtK(Math.abs(v))} />
+        <ReferenceLine y={0} stroke="hsl(var(--border))" />
         <Tooltip
           contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontFamily: "JetBrains Mono", fontSize: 12 }}
-          formatter={(v: number, name: string) => [fmtK(v), name]}
+          formatter={(v: number, name: string) => {
+            const isCall = name.endsWith("__c");
+            const exp = name.replace(/__[cp]$/, "");
+            return [`${isCall ? "C" : "P"} ${fmtK(Math.abs(v))}`, exp];
+          }}
         />
-        <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} />
+        <Legend
+          wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }}
+          formatter={(v: string) => v.replace(/__[cp]$/, "")}
+        />
         {exps.map(e => (
-          <Bar key={e} dataKey={e} stackId="dte" fill={colors[e]} name={e} />
+          <Bar key={`${e}-c`} dataKey={`${e}__c`} stackId="dte" fill={colors[e]} name={`${e}__c`} maxBarSize={28} />
+        ))}
+        {exps.map(e => (
+          <Bar key={`${e}-p`} dataKey={`${e}__p`} stackId="dte" fill={colors[e]} fillOpacity={0.55} name={`${e}__p`} maxBarSize={28} legendType="none" />
         ))}
         {refX != null && (
           <ReferenceLine
