@@ -17,12 +17,17 @@ Deno.serve(async (req) => {
   try {
     const { ticker, spot, expiration, totalGEX, zeroGamma, rows } = await req.json();
 
+    const fmtM = (v: any) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? `${(n / 1e6).toFixed(2)}M` : "N/A";
+    };
+
     // Top strikes by absolute net GEX
     const top = (rows ?? [])
       .slice()
       .sort((a: any, b: any) => Math.abs(b.net) - Math.abs(a.net))
       .slice(0, 12)
-      .map((r: any) => `K=${r.strike}: net=${(r.net/1e6).toFixed(2)}M (call ${(r.callGex/1e6).toFixed(2)}M, put ${(r.putGex/1e6).toFixed(2)}M)`)
+      .map((r: any) => `K=${r.strike}: net=${fmtM(r.net)} (call ${fmtM(r.callGex)}, put ${fmtM(r.putGex)})`)
       .join("\n");
 
     const sysPrompt = `你是资深期权交易员与做市商风控专家。基于 GEX(Gamma Exposure) 数据进行分析，并给出可执行的期权策略建议。
@@ -47,8 +52,8 @@ Deno.serve(async (req) => {
     const userPrompt = `标的: ${ticker}
 Spot: $${spot}
 到期日筛选: ${expiration ?? "全部"}
-Total Net GEX: ${(totalGEX/1e6).toFixed(2)}M
-Zero Gamma Level: ${zeroGamma ? `$${zeroGamma.toFixed(2)}` : "N/A"}
+Total Net GEX: ${fmtM(totalGEX)}
+Zero Gamma Level: ${Number.isFinite(Number(zeroGamma)) ? `$${Number(zeroGamma).toFixed(2)}` : "N/A"}
 
 按行权价 |Net GEX| 排序的前 12 档：
 ${top}`;

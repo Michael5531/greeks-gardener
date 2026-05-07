@@ -282,7 +282,7 @@ export default function GEX() {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <Stat label="Spot" value={spot ? `$${fmt(spot)}` : "—"} />
-        <Stat label="Total Net GEX" value={fmt(totalGEX / 1e6, 2) + "M"} positive={totalGEX >= 0} />
+        <Stat label="Total Net GEX" value={Number.isFinite(totalGEX) ? fmt(totalGEX / 1e6, 2) + "M" : "—"} positive={totalGEX >= 0} />
         <Stat label="Zero Gamma" value={zeroGamma ? `$${fmt(zeroGamma)}` : "—"} />
         <Stat label="合约数" value={`${totalContracts}`} />
         <Stat label="总 OI" value={totalOI >= 1e6 ? `${(totalOI/1e6).toFixed(2)}M` : totalOI >= 1e3 ? `${(totalOI/1e3).toFixed(1)}K` : `${totalOI}`} />
