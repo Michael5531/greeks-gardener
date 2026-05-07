@@ -28,6 +28,57 @@ function bs(S: number, K: number, T: number, r: number, sigma: number, type: "ca
   return K * Math.exp(-r * T) * N(-d2) - S * N(-d1);
 }
 
+// Bisection IV solver. Returns null on failure.
+function impliedVol(price: number, S: number, K: number, T: number, r: number, type: "call" | "put"): number | null {
+  if (!(price > 0) || T <= 0) return null;
+  let lo = 0.01, hi = 5.0;
+  let pLo = bs(S, K, T, r, lo, type) - price;
+  let pHi = bs(S, K, T, r, hi, type) - price;
+  if (pLo * pHi > 0) return null;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    const pMid = bs(S, K, T, r, mid, type) - price;
+    if (Math.abs(pMid) < 1e-4) return mid;
+    if (pMid * pLo < 0) { hi = mid; pHi = pMid; } else { lo = mid; pLo = pMid; }
+  }
+  return (lo + hi) / 2;
+}
+
+async function fetchAtmIvForDate(
+  apiKey: string, ticker: string, date: string, spot: number, dte: number,
+): Promise<number | null> {
+  try {
+    // Pick a contract whose expiration is ~dte days out and strike near spot
+    const targetExp = new Date(new Date(date).getTime() + dte * 86400000).toISOString().slice(0, 10);
+    const lo = (spot * 0.85).toFixed(2), hi = (spot * 1.15).toFixed(2);
+    const ref = `https://api.massive.com/v3/reference/options/contracts?underlying_ticker=${ticker}&as_of=${date}&expiration_date.gte=${date}&expiration_date.lte=${targetExp.slice(0,10)}&strike_price.gte=${lo}&strike_price.lte=${hi}&limit=100&apiKey=${apiKey}`;
+    const refR = await fetch(ref);
+    const refJ = await refR.json();
+    const contracts: any[] = refJ?.results ?? [];
+    if (!contracts.length) return null;
+    // Pick closest-to-spot, prefer expiration nearest to targetExp; one call + one put
+    const targetT = Date.parse(targetExp);
+    const score = (c: any) =>
+      Math.abs(c.strike_price - spot) + Math.abs(Date.parse(c.expiration_date) - targetT) / 1e9;
+    const calls = contracts.filter(c => c.contract_type === "call").sort((a, b) => score(a) - score(b));
+    const puts = contracts.filter(c => c.contract_type === "put").sort((a, b) => score(a) - score(b));
+    const picks = [calls[0], puts[0]].filter(Boolean);
+    const ivs: number[] = [];
+    for (const c of picks) {
+      const aggUrl = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(c.ticker)}/range/1/day/${date}/${date}?apiKey=${apiKey}`;
+      const aR = await fetch(aggUrl);
+      const aJ = await aR.json();
+      const close = aJ?.results?.[0]?.c;
+      if (!(close > 0)) continue;
+      const T = Math.max(1 / 365, (Date.parse(c.expiration_date) - Date.parse(date)) / (365 * 86400000));
+      const iv = impliedVol(close, spot, c.strike_price, T, 0.045, c.contract_type);
+      if (iv != null && iv > 0.02 && iv < 4) ivs.push(iv);
+    }
+    if (!ivs.length) return null;
+    return ivs.reduce((a, b) => a + b, 0) / ivs.length;
+  } catch { return null; }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -51,6 +102,7 @@ Deno.serve(async (req) => {
       strategy_type = "covered_call",
       dte = 30, delta_target = 0.3, iv = 0.30,
       profit_take = 0.5, stop_loss = 2,
+      iv_mode = "constant", // "constant" | "historical_atm"
     } = body;
 
     // Pull daily aggregates from Polygon
@@ -66,13 +118,27 @@ Deno.serve(async (req) => {
     const equity: { date: string; value: number }[] = [];
     let cash = 10000;
     let position: any = null;
+    // Per-bar IV (filled lazily when iv_mode === "historical_atm")
+    const ivPerBar: number[] = new Array(bars.length).fill(iv);
+    if (iv_mode === "historical_atm") {
+      let last = iv;
+      // Sample every ~3 trading days to keep API usage sane
+      for (let i = 0; i < bars.length; i++) {
+        const d = new Date(bars[i].t).toISOString().slice(0, 10);
+        if (i % 3 === 0) {
+          const v = await fetchAtmIvForDate(apiKey, ticker, d, bars[i].c, dte);
+          if (v != null) last = v;
+        }
+        ivPerBar[i] = last;
+        if (i % 30 === 0) console.log(`[backtest] iv@${d}=${ivPerBar[i].toFixed(3)}`);
+      }
+    }
 
     // Helper: estimate strike from delta target via inverse Black-Scholes (rough)
-    function strikeForDelta(S: number, T: number, target: number, type: "call" | "put") {
+    function strikeForDelta(S: number, T: number, target: number, type: "call" | "put", sigma: number) {
       // Inverse N(): use approximation
       const z = inverseNormal(type === "call" ? target : 1 - target);
-      // d1 = (ln(S/K) + (r + 0.5σ²)T)/(σ√T)  =>  K = S * exp((r + 0.5σ²)T - z*σ*√T)
-      return S * Math.exp((r0 + 0.5 * iv * iv) * T - z * iv * Math.sqrt(T));
+      return S * Math.exp((r0 + 0.5 * sigma * sigma) * T - z * sigma * Math.sqrt(T));
     }
 
     type LegSpec = { type: "call" | "put"; side: "long" | "short"; strikeOffsetPct: number };
@@ -93,20 +159,21 @@ Deno.serve(async (req) => {
     const specs = specFor(strategy_type);
     if (!specs.length) return json({ error: `strategy '${strategy_type}' 暂不支持引擎回测` }, 400);
 
-    function legPrice(S: number, K: number, T: number, type: "call" | "put") {
-      return bs(S, K, T, r0, iv, type);
+    function legPrice(S: number, K: number, T: number, type: "call" | "put", sigma: number) {
+      return bs(S, K, T, r0, sigma, type);
     }
 
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
       const date = new Date(bar.t).toISOString().slice(0, 10);
       const S = bar.c;
+      const sigma = ivPerBar[i];
 
       if (position) {
         const T = Math.max(0, (position.expiry - bar.t) / (1000 * 60 * 60 * 24 * 365));
         let nowVal = 0, entryVal = 0;
         for (const l of position.legs) {
-          const cur = legPrice(S, l.strike, T, l.type);
+          const cur = legPrice(S, l.strike, T, l.type, sigma);
           const sign = l.side === "long" ? 1 : -1;
           nowVal += sign * cur;
           entryVal += sign * l.entry_premium;
@@ -131,7 +198,7 @@ Deno.serve(async (req) => {
         const T = dte / 365;
         const legs = specs.map(s => {
           const K = Math.round(S * (1 + s.strikeOffsetPct) * 100) / 100;
-          const premium = legPrice(S, K, T, s.type);
+          const premium = legPrice(S, K, T, s.type, sigma);
           return { type: s.type, side: s.side, strike: K, entry_premium: premium };
         });
         position = {
@@ -167,7 +234,7 @@ Deno.serve(async (req) => {
       user_id: user.id,
       ticker,
       start_date, end_date,
-      params: { strategy_type, dte, delta_target, iv, profit_take, stop_loss },
+      params: { strategy_type, dte, delta_target, iv, profit_take, stop_loss, iv_mode },
       metrics, equity_curve: equity, trades, status: "completed",
     }).select().single();
     if (error) throw error;
