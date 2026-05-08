@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Copy, Trash2 } from "lucide-react";
+import { useT } from "@/i18n";
 
 export interface UILeg {
   id: string;
@@ -91,12 +92,13 @@ export default function OptionLegsBuilder({ ticker, spot, chain, expirations, le
   }
   function remove(id: string) { onChange(legs.filter(l => l.id !== id)); }
 
+  const tx = useT();
   return (
     <div className="rounded-md border border-border bg-background/40 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <Label className="text-xs text-muted-foreground">Legs · 从 {ticker || "—"} 期权链选择</Label>
+        <Label className="text-xs text-muted-foreground">{tx.legs.fromChain} {ticker ? `· ${ticker}` : ""}</Label>
         <Button size="sm" variant="outline" onClick={add} disabled={!legs.length} className="h-7 text-[11px]">
-          <Plus className="h-3 w-3 mr-1" />添加 Leg
+          <Plus className="h-3 w-3 mr-1" />{tx.legs.add}
         </Button>
       </div>
 
@@ -166,7 +168,7 @@ export default function OptionLegsBuilder({ ticker, spot, chain, expirations, le
               );
             })}
             {!legs.length && (
-              <tr><td colSpan={8} className="text-center text-muted-foreground py-3">加载期权链中…</td></tr>
+              <tr><td colSpan={8} className="text-center text-muted-foreground py-3">{tx.legs.loading}</td></tr>
             )}
           </tbody>
         </table>

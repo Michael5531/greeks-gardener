@@ -26,7 +26,7 @@ export default function AppLayout() {
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="md:w-60 md:min-h-screen border-t md:border-t-0 md:border-r border-border bg-card/80 md:bg-card/40 backdrop-blur flex md:flex-col fixed md:sticky bottom-0 md:top-0 left-0 right-0 md:right-auto z-50 md:z-auto">
         <div className="hidden md:block px-4 py-4 border-b border-border">
-          <Link to="/" className="group flex items-center gap-3 rounded-lg p-1.5 -m-1.5 hover:bg-secondary/60 transition-colors" title="返回首页">
+          <Link to="/" className="group flex items-center gap-3 rounded-lg p-1.5 -m-1.5 hover:bg-secondary/60 transition-colors" title={t.brand.backHome}>
             <div className="relative h-9 w-9 shrink-0">
               <div className="absolute inset-0 rounded-lg blur-md opacity-50 group-hover:opacity-90 transition-opacity"
                 style={{ background: "var(--gradient-primary)" }} />

@@ -11,6 +11,7 @@ import { useOptionsChain } from "@/hooks/useOptionsChain";
 import OptionLegsBuilder, { dteFor, type UILeg } from "@/components/OptionLegsBuilder";
 import { useComputePricerMultileg } from "@/hooks/useComputePricerMultileg";
 import { fmt } from "@/lib/optionUtils";
+import { useT } from "@/i18n";
 
 export interface OptionPricerProps {
   externalTicker?: string | null;
@@ -18,6 +19,7 @@ export interface OptionPricerProps {
 }
 
 export default function OptionPricer({ externalTicker, externalSpot }: OptionPricerProps = {}) {
+  const tx = useT();
   const [internalTicker, setInternalTicker] = useState<string>("");
   const ticker = externalTicker ?? internalTicker;
   const showInternalSearch = externalTicker == null;
@@ -66,8 +68,8 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
     <div className="rounded-lg border border-border bg-card/40 p-4 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h3 className="text-sm font-semibold">期权价值计算器 · 多腿</h3>
-          <p className="text-[11px] text-muted-foreground">从期权链选择 buy/sell legs · 单合约 = 100 股</p>
+          <h3 className="text-sm font-semibold">{tx.pricerExt.title}</h3>
+          <p className="text-[11px] text-muted-foreground">{tx.pricerExt.sub}</p>
         </div>
         <div className="flex items-center gap-3">
           {spot != null && <span className="font-mono text-xs text-muted-foreground">Spot ${spot.toFixed(2)}</span>}
@@ -81,9 +83,9 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-[11px] text-muted-foreground">
-          {legs.length === 0 ? "请先添加 legs" :
-            armed ? (loading ? "正在后端计算…" : "已计算 · 调节滑块自动更新") :
-              "Legs 已就绪 · 点击下方“计算”开始"}
+          {legs.length === 0 ? tx.pricerExt.needLegs :
+            armed ? (loading ? tx.pricerExt.computing : tx.pricerExt.computed) :
+              tx.pricerExt.armed}
         </div>
         <Button
           size="sm"
@@ -93,25 +95,25 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
           className="h-8"
         >
           {armed ? <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> : <Calculator className="h-3.5 w-3.5 mr-1.5" />}
-          {armed ? "重新计算" : "计算"}
+          {armed ? tx.pricerExt.btnRecompute : tx.pricerExt.btnCompute}
         </Button>
       </div>
 
     {armed && (
       <>
       <div className="grid md:grid-cols-3 gap-4">
-        <SliderField label={`标的变动: ${pctMove > 0 ? "+" : ""}${pctMove}%`} value={pctMove} min={-20} max={20} step={0.5} onChange={setPctMove} />
-        <SliderField label={`IV 变动: ${ivMove > 0 ? "+" : ""}${ivMove}%`} value={ivMove} min={-30} max={30} step={1} onChange={setIvMove} />
-        <SliderField label={`时间流逝: ${daysPassed} 天`} value={daysPassed} min={0} max={Math.max(minDte - 1, 1)} step={1} onChange={setDaysPassed} />
+        <SliderField label={`${tx.pricerExt.spotMove}: ${pctMove > 0 ? "+" : ""}${pctMove}%`} value={pctMove} min={-20} max={20} step={0.5} onChange={setPctMove} />
+        <SliderField label={`${tx.pricerExt.ivMove}: ${ivMove > 0 ? "+" : ""}${ivMove}%`} value={ivMove} min={-30} max={30} step={1} onChange={setIvMove} />
+        <SliderField label={`${tx.pricerExt.timeDecay}: ${daysPassed} ${tx.pricerExt.days}`} value={daysPassed} min={0} max={Math.max(minDte - 1, 1)} step={1} onChange={setDaysPassed} />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <Stat label="组合现值" value={`$${fmt(pr?.currentValue ?? 0)}`} />
-        <Stat label="预测值" value={`$${fmt(pr?.projectedValue ?? 0)}`} />
-        <Stat label="ΔPnL" value={`${(pr?.dPrice ?? 0) >= 0 ? "+" : ""}$${fmt(pr?.dPrice ?? 0)}`} positive={(pr?.dPrice ?? 0) >= 0} />
-        <Stat label="净 Δ" value={fmt(greeks.delta, 3)} />
-        <Stat label="净 Γ" value={fmt(greeks.gamma, 4)} />
-        <Stat label="净 Θ /day" value={`$${fmt(greeks.theta * 100)}`} />
+        <Stat label={tx.pricerExt.cur} value={`$${fmt(pr?.currentValue ?? 0)}`} />
+        <Stat label={tx.pricerExt.proj} value={`$${fmt(pr?.projectedValue ?? 0)}`} />
+        <Stat label={tx.pricerExt.dpnl} value={`${(pr?.dPrice ?? 0) >= 0 ? "+" : ""}$${fmt(pr?.dPrice ?? 0)}`} positive={(pr?.dPrice ?? 0) >= 0} />
+        <Stat label={tx.pricerExt.netD} value={fmt(greeks.delta, 3)} />
+        <Stat label={tx.pricerExt.netG} value={fmt(greeks.gamma, 4)} />
+        <Stat label={tx.pricerExt.netT} value={`$${fmt(greeks.theta * 100)}`} />
       </div>
 
       <div className="h-80">
@@ -121,7 +123,7 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
               <CartesianGrid stroke="hsl(var(--grid-line))" />
               <XAxis dataKey="price" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
               <YAxis yAxisId="pnl" tickFormatter={v => `$${v}`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
-              <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any, n: any) => [`$${v}`, n === "expiry" ? "到期 PnL" : "今日 PnL"]} labelFormatter={(l: any) => `Spot $${l}`} />
+              <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any, n: any) => [`$${v}`, n === "expiry" ? tx.pricerExt.expiryPnl : tx.pricerExt.todayPnl]} labelFormatter={(l: any) => `Spot $${l}`} />
               <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} />
               <ReferenceLine yAxisId="pnl" y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
               {spot != null && (
@@ -131,8 +133,8 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
               {(pr?.breakevens ?? []).map((b, i) => (
                 <ReferenceLine yAxisId="pnl" key={i} x={b} stroke="hsl(var(--muted-foreground))" strokeDasharray="2 2" label={{ value: `BE $${b}`, fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
               ))}
-              <Line yAxisId="pnl" type="monotone" dataKey="expiry" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="到期 PnL" />
-              <Line yAxisId="pnl" type="monotone" dataKey="today" stroke="hsl(var(--accent))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="今日 PnL" />
+              <Line yAxisId="pnl" type="monotone" dataKey="expiry" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={tx.pricerExt.expiryPnl} />
+              <Line yAxisId="pnl" type="monotone" dataKey="today" stroke="hsl(var(--accent))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name={tx.pricerExt.todayPnl} />
             </ComposedChart>
           )}
         </ChartSizer>
@@ -140,7 +142,7 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
 
       {underlying.length > 0 && (
         <div className="h-44">
-          <div className="text-[11px] text-muted-foreground mb-1">{ticker} 标的近 30 个交易日走势</div>
+          <div className="text-[11px] text-muted-foreground mb-1">{ticker} · {tx.pricerExt.underlyingTrend}</div>
           <ChartSizer>
             {({ width, height }) => (
               <LineChart width={width} height={height} data={underlying} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
@@ -156,7 +158,7 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
         </div>
       )}
 
-      {loading && <div className="text-[11px] text-muted-foreground">计算中…</div>}
+      {loading && <div className="text-[11px] text-muted-foreground">{tx.pricerExt.calculating}</div>}
       </>
     )}
     </div>

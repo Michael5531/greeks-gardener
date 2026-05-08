@@ -4,8 +4,10 @@ import { Search, Star, Check } from "lucide-react";
 import { searchTickers } from "@/lib/polygon";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/i18n";
 
 export default function TickerSearch({ onSelect }: { onSelect: (t: { ticker: string; name: string }) => void }) {
+  const tx = useT();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -51,7 +53,7 @@ export default function TickerSearch({ onSelect }: { onSelect: (t: { ticker: str
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           className="pl-9 pr-9 font-mono"
-          placeholder="搜索美股代码后按 Enter 或点击 ✓ 确认"
+          placeholder={tx.ticker.placeholder}
           value={q}
           onChange={e => { setQ(e.target.value.toUpperCase()); setStaged(null); }}
           onFocus={() => setOpen(true)}
@@ -59,16 +61,16 @@ export default function TickerSearch({ onSelect }: { onSelect: (t: { ticker: str
           onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); confirm(); } }}
         />
         {staged && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">待确认</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{tx.ticker.pending}</span>
         )}
       </div>
-      <Button type="button" size="icon" variant="secondary" onMouseDown={e => { e.preventDefault(); confirm(); }} title="确认 underlying">
+      <Button type="button" size="icon" variant="secondary" onMouseDown={e => { e.preventDefault(); confirm(); }} title={tx.ticker.confirmTitle}>
         <Check className="h-4 w-4" />
       </Button>
       {showWatchlist && (
         <div className="absolute z-20 mt-1 top-full left-0 right-12 max-h-72 overflow-auto rounded-md border border-border bg-popover elevated">
           <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/60 flex items-center gap-1.5">
-            <Star className="h-3 w-3" /> 自选
+            <Star className="h-3 w-3" /> {tx.ticker.watchlist}
           </div>
           {watchlist.map(r => (
             <button
