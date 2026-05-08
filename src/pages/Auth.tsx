@@ -9,10 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { TrendingUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useT } from "@/i18n";
 
 export default function AuthPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,7 +36,7 @@ export default function AuthPage() {
     });
     setLoading(false);
     if (error) return toast.error(error.message);
-    toast.success("注册成功，请检查邮箱验证后登录。");
+    toast.success(t.auth.signupOk);
   }
   async function google() {
     const result = await lovable.auth.signInWithOAuth("google", {
@@ -57,37 +59,37 @@ export default function AuthPage() {
         </div>
         <Tabs defaultValue="signin">
           <TabsList className="grid grid-cols-2 mb-4 w-full">
-            <TabsTrigger value="signin">登录</TabsTrigger>
-            <TabsTrigger value="signup">注册</TabsTrigger>
+            <TabsTrigger value="signin">{t.auth.signIn}</TabsTrigger>
+            <TabsTrigger value="signup">{t.auth.signUp}</TabsTrigger>
           </TabsList>
           <TabsContent value="signin" className="space-y-3">
-            <FormFields email={email} setEmail={setEmail} password={password} setPassword={setPassword} />
-            <Button className="w-full" disabled={loading} onClick={signIn}>登录</Button>
+            <FormFields email={email} setEmail={setEmail} password={password} setPassword={setPassword} t={t} />
+            <Button className="w-full" disabled={loading} onClick={signIn}>{t.auth.signIn}</Button>
           </TabsContent>
           <TabsContent value="signup" className="space-y-3">
-            <FormFields email={email} setEmail={setEmail} password={password} setPassword={setPassword} />
-            <Button className="w-full" disabled={loading} onClick={signUp}>创建账号</Button>
+            <FormFields email={email} setEmail={setEmail} password={password} setPassword={setPassword} t={t} />
+            <Button className="w-full" disabled={loading} onClick={signUp}>{t.auth.create}</Button>
           </TabsContent>
         </Tabs>
         <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
-          <div className="h-px flex-1 bg-border" /> 或 <div className="h-px flex-1 bg-border" />
+          <div className="h-px flex-1 bg-border" /> {t.auth.or} <div className="h-px flex-1 bg-border" />
         </div>
-        <Button variant="outline" className="w-full" onClick={google}>使用 Google 登录</Button>
+        <Button variant="outline" className="w-full" onClick={google}>{t.auth.google}</Button>
       </div>
     </div>
   );
 }
 
-function FormFields({ email, setEmail, password, setPassword }: any) {
+function FormFields({ email, setEmail, password, setPassword, t }: any) {
   return (
     <>
       <div className="space-y-1">
-        <Label htmlFor="email">邮箱</Label>
+        <Label htmlFor="email">{t.auth.email}</Label>
         <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="password">密码</Label>
-        <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="至少 6 位" />
+        <Label htmlFor="password">{t.auth.password}</Label>
+        <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={t.auth.pwHint} />
       </div>
     </>
   );
