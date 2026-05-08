@@ -188,8 +188,9 @@ Deno.serve(async (req) => {
         for (const l of position.legs) {
           const cur = legPrice(S, l.strike, T, l.type, sigma);
           const sign = l.side === "long" ? 1 : -1;
-          nowVal += sign * cur;
-          entryVal += sign * l.entry_premium;
+          const q = (l as any).qty ?? 1;
+          nowVal += sign * cur * q;
+          entryVal += sign * l.entry_premium * q;
         }
         const pnl = (nowVal - entryVal) * 100;
         const debit = entryVal; // positive for long-debit strategies
