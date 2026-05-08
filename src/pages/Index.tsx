@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Activity, BarChart3, LineChart, TrendingUp, Boxes, Radar,
@@ -34,7 +35,52 @@ const stats = [
   { v: "24/7", l: "数据流守护" },
 ];
 
+// Mock GEX profile per ticker — strikes & gamma exposure (in $B)
+const GEX_DATA: Record<string, { spot: number; zeroG: number; strikes: { k: number; gex: number }[] }> = {
+  SPY: {
+    spot: 612.34, zeroG: 608.5,
+    strikes: [
+      { k: 595, gex: -1.8 }, { k: 600, gex: -2.6 }, { k: 605, gex: -1.2 },
+      { k: 610, gex: 0.4 }, { k: 612, gex: 1.1 }, { k: 615, gex: 3.2 },
+      { k: 620, gex: 2.4 }, { k: 625, gex: 1.6 }, { k: 630, gex: 0.7 },
+    ],
+  },
+  QQQ: {
+    spot: 548.91, zeroG: 545.0,
+    strikes: [
+      { k: 530, gex: -1.4 }, { k: 535, gex: -2.1 }, { k: 540, gex: -0.9 },
+      { k: 545, gex: 0.3 }, { k: 548, gex: 0.9 }, { k: 550, gex: 2.6 },
+      { k: 555, gex: 1.9 }, { k: 560, gex: 1.1 }, { k: 565, gex: 0.5 },
+    ],
+  },
+  NVDA: {
+    spot: 184.22, zeroG: 180.0,
+    strikes: [
+      { k: 170, gex: -0.9 }, { k: 175, gex: -1.6 }, { k: 180, gex: -0.4 },
+      { k: 182, gex: 0.5 }, { k: 185, gex: 1.4 }, { k: 190, gex: 2.8 },
+      { k: 195, gex: 1.7 }, { k: 200, gex: 1.0 }, { k: 205, gex: 0.4 },
+    ],
+  },
+  TSLA: {
+    spot: 412.07, zeroG: 418.0,
+    strikes: [
+      { k: 395, gex: -2.2 }, { k: 400, gex: -3.1 }, { k: 405, gex: -1.8 },
+      { k: 410, gex: -0.6 }, { k: 415, gex: 0.4 }, { k: 420, gex: 1.5 },
+      { k: 425, gex: 1.1 }, { k: 430, gex: 0.7 }, { k: 435, gex: 0.3 },
+    ],
+  },
+};
+
 export default function Index() {
+  const [gexTicker, setGexTicker] = useState<keyof typeof GEX_DATA>("SPY");
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const gex = GEX_DATA[gexTicker];
+  const maxAbs = useMemo(() => Math.max(...gex.strikes.map(s => Math.abs(s.gex))), [gex]);
+  const callWall = useMemo(() => gex.strikes.reduce((a, b) => (b.gex > a.gex ? b : a)).k, [gex]);
+  const putWall = useMemo(() => gex.strikes.reduce((a, b) => (b.gex < a.gex ? b : a)).k, [gex]);
+  const netGex = useMemo(() => gex.strikes.reduce((s, x) => s + x.gex, 0), [gex]);
+  const active = hoverIdx != null ? gex.strikes[hoverIdx] : null;
+
   return (
     <div className="min-h-screen relative overflow-hidden bg-background text-foreground">
       {/* Ambient layers */}
@@ -46,15 +92,7 @@ export default function Index() {
 
       {/* Nav */}
       <header className="relative z-20 max-w-[1400px] mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-md grid place-items-center" style={{ background: "var(--gradient-primary)" }}>
-            <TrendingUp className="h-4 w-4 text-background" />
-          </div>
-          <div>
-            <div className="font-semibold tracking-tight leading-none">OPTI-X</div>
-            <div className="text-[10px] text-muted-foreground font-mono mt-1">OPTIONS · INTELLIGENCE</div>
-          </div>
-        </div>
+        <Logo />
         <div className="hidden md:flex items-center gap-7 text-sm text-muted-foreground font-mono uppercase tracking-wider">
           <a className="hover:text-foreground transition-colors" href="#modules">Modules</a>
           <a className="hover:text-foreground transition-colors" href="#tape">Market</a>
@@ -117,36 +155,85 @@ export default function Index() {
           {/* Terminal preview card */}
           <div className="lg:col-span-4">
             <div className="relative rounded-xl border border-border bg-card/70 backdrop-blur p-5 elevated">
-              <div className="absolute -inset-px rounded-xl pointer-events-none" style={{ background: "linear-gradient(135deg, hsl(165 90% 50% / 0.4), transparent 40%, hsl(280 85% 65% / 0.3))", maskImage: "linear-gradient(black,black)", WebkitMaskComposite: "xor", padding: 1 }} />
+              <div className="absolute -inset-px rounded-xl pointer-events-none -z-10" style={{ background: "linear-gradient(135deg, hsl(165 90% 50% / 0.4), transparent 40%, hsl(280 85% 65% / 0.3))" }} />
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-bear" />
                   <span className="h-2 w-2 rounded-full bg-warning" />
                   <span className="h-2 w-2 rounded-full bg-bull" />
                 </div>
-                <span className="text-[10px] font-mono text-muted-foreground tracking-wider">SPY · 0DTE · GEX</span>
+                <span className="text-[10px] font-mono text-muted-foreground tracking-wider">{gexTicker} · 0DTE · GEX</span>
+              </div>
+
+              {/* Ticker switcher */}
+              <div className="flex gap-1 mb-4 p-0.5 rounded-md bg-background/40 border border-border/60">
+                {(Object.keys(GEX_DATA) as Array<keyof typeof GEX_DATA>).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => { setGexTicker(t); setHoverIdx(null); }}
+                    className={`flex-1 text-[10px] font-mono uppercase tracking-wider py-1.5 rounded transition-colors ${
+                      gexTicker === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              {/* Interactive GEX bar chart */}
+              <div className="relative h-40 mb-3">
+                <svg viewBox="0 0 320 160" className="w-full h-full" preserveAspectRatio="none">
+                  {/* zero line */}
+                  <line x1="0" y1="80" x2="320" y2="80" stroke="hsl(var(--border))" strokeDasharray="2 2" />
+                  {/* spot marker */}
+                  {(() => {
+                    const spotIdx = gex.strikes.findIndex((s, i) =>
+                      i === gex.strikes.length - 1 || (gex.spot >= s.k && gex.spot < gex.strikes[i + 1].k)
+                    );
+                    const xs = gex.strikes.length;
+                    const bw = 320 / xs;
+                    const sx = (spotIdx + 0.5) * bw + ((gex.spot - gex.strikes[spotIdx].k) / (gex.strikes[Math.min(spotIdx + 1, xs - 1)].k - gex.strikes[spotIdx].k || 1)) * bw;
+                    return (
+                      <line x1={sx} y1="0" x2={sx} y2="160" stroke="hsl(var(--foreground))" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+                    );
+                  })()}
+                  {gex.strikes.map((s, i) => {
+                    const bw = 320 / gex.strikes.length;
+                    const x = i * bw + bw * 0.15;
+                    const w = bw * 0.7;
+                    const h = (Math.abs(s.gex) / maxAbs) * 70;
+                    const y = s.gex >= 0 ? 80 - h : 80;
+                    const isHover = hoverIdx === i;
+                    return (
+                      <rect
+                        key={i}
+                        x={x} y={y} width={w} height={h}
+                        fill={s.gex >= 0 ? "hsl(var(--bull))" : "hsl(var(--bear))"}
+                        opacity={hoverIdx == null || isHover ? 0.95 : 0.35}
+                        className="transition-opacity cursor-pointer"
+                        onMouseEnter={() => setHoverIdx(i)}
+                        onMouseLeave={() => setHoverIdx(null)}
+                      />
+                    );
+                  })}
+                </svg>
+                {active && (
+                  <div className="absolute top-1 right-1 px-2 py-1 rounded bg-popover border border-border text-[10px] font-mono pointer-events-none">
+                    <div className="text-muted-foreground">K {active.k}</div>
+                    <div className={active.gex >= 0 ? "text-bull" : "text-bear"}>
+                      {active.gex >= 0 ? "+" : ""}{active.gex.toFixed(2)}B
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="font-mono text-xs space-y-1.5">
-                <Row k="Spot"        v="612.34"  tone="default"/>
-                <Row k="Zero Γ"      v="608.50"  tone="warn"/>
-                <Row k="Call Wall"   v="615.00"  tone="bull"/>
-                <Row k="Put Wall"    v="600.00"  tone="bear"/>
-                <Row k="Net GEX"     v="+2.84B"  tone="bull"/>
-                <Row k="IV Rank"     v="34"      tone="default"/>
+                <Row k="Spot"      v={gex.spot.toFixed(2)} tone="default"/>
+                <Row k="Zero Γ"    v={gex.zeroG.toFixed(2)} tone="warn"/>
+                <Row k="Call Wall" v={callWall.toFixed(2)} tone="bull"/>
+                <Row k="Put Wall"  v={putWall.toFixed(2)} tone="bear"/>
+                <Row k="Net GEX"   v={`${netGex >= 0 ? "+" : ""}${netGex.toFixed(2)}B`} tone={netGex >= 0 ? "bull" : "bear"}/>
               </div>
-
-              {/* sparkline */}
-              <svg viewBox="0 0 200 60" className="w-full h-16 mt-5">
-                <defs>
-                  <linearGradient id="spk" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(165 90% 50%)" stopOpacity="0.5"/>
-                    <stop offset="100%" stopColor="hsl(165 90% 50%)" stopOpacity="0"/>
-                  </linearGradient>
-                </defs>
-                <path d="M0,40 L20,32 L40,38 L60,24 L80,28 L100,18 L120,22 L140,12 L160,18 L180,8 L200,14 L200,60 L0,60 Z" fill="url(#spk)"/>
-                <path d="M0,40 L20,32 L40,38 L60,24 L80,28 L100,18 L120,22 L140,12 L160,18 L180,8 L200,14" fill="none" stroke="hsl(165 90% 50%)" strokeWidth="1.5"/>
-              </svg>
 
               <div className="flex items-center justify-between mt-3 text-[10px] font-mono text-muted-foreground">
                 <span>09:30 ET</span>
@@ -224,6 +311,41 @@ export default function Index() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function Logo() {
+  return (
+    <Link to="/" className="flex items-center gap-3 group">
+      <div className="relative h-10 w-10">
+        {/* outer glow */}
+        <div className="absolute inset-0 rounded-lg blur-md opacity-60 group-hover:opacity-90 transition-opacity"
+          style={{ background: "var(--gradient-primary)" }} />
+        {/* glass plate */}
+        <div className="relative h-10 w-10 rounded-lg border border-border/80 bg-background/80 backdrop-blur grid place-items-center overflow-hidden">
+          <div className="absolute inset-0 opacity-30"
+            style={{ background: "linear-gradient(135deg, hsl(165 90% 50% / 0.5), transparent 50%, hsl(280 85% 65% / 0.4))" }} />
+          <svg viewBox="0 0 32 32" className="relative h-5 w-5">
+            <defs>
+              <linearGradient id="lg-stroke" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="hsl(165 90% 55%)" />
+                <stop offset="100%" stopColor="hsl(280 85% 70%)" />
+              </linearGradient>
+            </defs>
+            {/* X-curve: rising and falling, like option payoff */}
+            <path d="M3 26 L13 14 L19 20 L29 6" fill="none" stroke="url(#lg-stroke)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="13" cy="14" r="1.6" fill="hsl(165 90% 55%)" />
+            <circle cx="19" cy="20" r="1.6" fill="hsl(280 85% 70%)" />
+          </svg>
+        </div>
+      </div>
+      <div>
+        <div className="font-semibold tracking-[-0.02em] leading-none text-[15px]">
+          OPTI<span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-primary)" }}>·X</span>
+        </div>
+        <div className="text-[9px] text-muted-foreground font-mono mt-1 tracking-[0.25em]">OPTIONS INTELLIGENCE</div>
+      </div>
+    </Link>
   );
 }
 
