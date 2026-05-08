@@ -14,8 +14,6 @@ import { STRATEGIES, getStrategy } from "@/lib/strategies";
 import StrategyCard from "@/components/StrategyCard";
 import { getOptionsChain, getSnapshot } from "@/lib/polygon";
 import { useComputeGEX } from "@/hooks/useComputeGEX";
-import { useOptionsChain } from "@/hooks/useOptionsChain";
-import OptionLegsBuilder, { dteFor, type UILeg } from "@/components/OptionLegsBuilder";
 import OptionPricer from "@/components/OptionPricer";
 
 export default function Backtest() {
@@ -36,8 +34,6 @@ export default function Backtest() {
   const [spot, setSpot] = useState<number | null>(null);
   const [atmIv, setAtmIv] = useState<number | null>(null);
   const [pulling, setPulling] = useState(false);
-  const [customLegs, setCustomLegs] = useState<UILeg[]>([]);
-  const { data: chainForLegs, expirations: chainExps } = useOptionsChain(strategy === "custom" ? (ticker || null) : null);
 
   const def = getStrategy(strategy);
 
@@ -94,10 +90,6 @@ export default function Backtest() {
         ticker: ticker.toUpperCase(), start_date: start, end_date: end,
         strategy_type: strategy, dte: Number(dte), delta_target: Number(delta), iv: Number(iv),
         profit_take: 0.5, stop_loss: 2, iv_mode: ivMode,
-        custom_legs: strategy === "custom" ? customLegs.map(l => ({
-          type: l.type, side: l.side, strike: l.strike, dte: dteFor(l.expiration),
-          iv: l.iv, qty: l.qty, expiration: l.expiration,
-        })) : undefined,
       },
     });
     setRunning(false);
