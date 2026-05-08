@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PricerInput {
@@ -24,26 +25,19 @@ export interface PricerResult {
 }
 
 export function useComputePricer(input: PricerInput | null) {
-  const [data, setData] = useState<PricerResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const key = input ? JSON.stringify(input) : "";
-  const lastKey = useRef<string>("");
-
-  useEffect(() => {
-    if (!input) return;
-    if (lastKey.current === key) return;
-    lastKey.current = key;
-    let cancel = false;
-    setLoading(true); setError(null);
-    supabase.functions.invoke("compute-pricer", { body: input })
-      .then(({ data: d, error: e }) => {
-        if (cancel) return;
-        if (e || (d as any)?.error) { setError(e?.message ?? (d as any).error); setData(null); }
-        else setData(d as PricerResult);
-      }).finally(() => { if (!cancel) setLoading(false); });
-    return () => { cancel = true; };
-  }, [key]);
-
-  return { data, loading, error };
+  const [debounced, setDebounced] = useState(input);
+  useEffect(() => { const id = setTimeout(() => setDebounced(input), 300); return () => clearTimeout(id); }, [JSON.stringify(input)]);
+  const q = useQuery({
+    queryKey: ["pricer", debounced && JSON.stringify(debounced)],
+    enabled: !!debounced,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("compute-pricer", { body: debounced });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as PricerResult;
+    },
+  });
+  return { data: q.data ?? null, loading: q.isLoading, error: q.error ? (q.error as Error).message : null };
 }

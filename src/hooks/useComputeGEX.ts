@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface GEXResult {
@@ -15,27 +15,18 @@ export interface GEXResult {
 }
 
 export function useComputeGEX(ticker: string | null, expirations: string[]) {
-  const [data, setData] = useState<GEXResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const key = `${ticker ?? ""}|${[...expirations].sort().join(",")}`;
-  const lastKey = useRef<string>("");
-
-  useEffect(() => {
-    if (!ticker) { setData(null); return; }
-    if (lastKey.current === key) return;
-    lastKey.current = key;
-    let cancel = false;
-    setLoading(true); setError(null);
-    supabase.functions.invoke("compute-gex", {
-      body: { ticker, expirations },
-    }).then(({ data: d, error: e }) => {
-      if (cancel) return;
-      if (e || (d as any)?.error) { setError(e?.message ?? (d as any).error); setData(null); }
-      else setData(d as GEXResult);
-    }).finally(() => { if (!cancel) setLoading(false); });
-    return () => { cancel = true; };
-  }, [key]);
-
-  return { data, loading, error };
+  const q = useQuery({
+    queryKey: ["gex", key],
+    enabled: !!ticker,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("compute-gex", { body: { ticker, expirations } });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as GEXResult;
+    },
+  });
+  return { data: q.data ?? null, loading: q.isLoading, error: q.error ? (q.error as Error).message : null };
 }
