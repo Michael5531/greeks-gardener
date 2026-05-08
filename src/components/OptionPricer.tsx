@@ -15,8 +15,9 @@ export interface OptionPricerProps {
 }
 
 export default function OptionPricer({ externalTicker }: OptionPricerProps = {}) {
-  const [ticker, setTicker] = useState<string>(externalTicker ?? "");
-  useEffect(() => { if (externalTicker) setTicker(externalTicker); }, [externalTicker]);
+  const [internalTicker, setInternalTicker] = useState<string>("");
+  const ticker = externalTicker ?? internalTicker;
+  const showInternalSearch = externalTicker == null;
   const { quote } = useLiveQuote(ticker || null, 5000);
   const spot = quote?.price ?? null;
 
@@ -63,7 +64,9 @@ export default function OptionPricer({ externalTicker }: OptionPricerProps = {})
         </div>
         <div className="flex items-center gap-3">
           {spot != null && <span className="font-mono text-xs text-muted-foreground">Spot ${spot.toFixed(2)}</span>}
-          <div className="w-64"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+          {showInternalSearch && (
+            <div className="w-64"><TickerSearch onSelect={t => setInternalTicker(t.ticker)} /></div>
+          )}
         </div>
       </div>
 

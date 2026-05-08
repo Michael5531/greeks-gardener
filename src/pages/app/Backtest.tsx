@@ -14,8 +14,7 @@ import { STRATEGIES, getStrategy } from "@/lib/strategies";
 import StrategyCard from "@/components/StrategyCard";
 import { getOptionsChain, getSnapshot } from "@/lib/polygon";
 import { useComputeGEX } from "@/hooks/useComputeGEX";
-import { useOptionsChain } from "@/hooks/useOptionsChain";
-import OptionLegsBuilder, { dteFor, type UILeg } from "@/components/OptionLegsBuilder";
+import OptionPricer from "@/components/OptionPricer";
 
 export default function Backtest() {
   const [selTicker, setSelTicker] = useSelectedTicker();
@@ -35,8 +34,6 @@ export default function Backtest() {
   const [spot, setSpot] = useState<number | null>(null);
   const [atmIv, setAtmIv] = useState<number | null>(null);
   const [pulling, setPulling] = useState(false);
-  const [customLegs, setCustomLegs] = useState<UILeg[]>([]);
-  const { data: chainForLegs, expirations: chainExps } = useOptionsChain(strategy === "custom" ? (ticker || null) : null);
 
   const def = getStrategy(strategy);
 
@@ -83,8 +80,8 @@ export default function Backtest() {
       toast.error("此策略暂不支持引擎回测，下方 Payoff 可视化可参考。");
       return;
     }
-    if (strategy === "custom" && customLegs.length === 0) {
-      toast.error("请至少添加一条 leg");
+    if (strategy === "custom") {
+      toast.info("Custom 策略请使用下方多腿计算器即时分析；引擎回测暂未支持自定义 legs。");
       return;
     }
     setRunning(true);
@@ -93,10 +90,6 @@ export default function Backtest() {
         ticker: ticker.toUpperCase(), start_date: start, end_date: end,
         strategy_type: strategy, dte: Number(dte), delta_target: Number(delta), iv: Number(iv),
         profit_take: 0.5, stop_loss: 2, iv_mode: ivMode,
-        custom_legs: strategy === "custom" ? customLegs.map(l => ({
-          type: l.type, side: l.side, strike: l.strike, dte: dteFor(l.expiration),
-          iv: l.iv, qty: l.qty, expiration: l.expiration,
-        })) : undefined,
       },
     });
     setRunning(false);
@@ -159,13 +152,10 @@ export default function Backtest() {
         </div>
       </div>
 
-      <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
-
-      {strategy === "custom" && (
-        <OptionLegsBuilder
-          ticker={ticker} spot={spot} chain={chainForLegs} expirations={chainExps}
-          legs={customLegs} onChange={setCustomLegs} defaultIv={iv}
-        />
+      {strategy === "custom" ? (
+        <OptionPricer externalTicker={ticker} />
+      ) : (
+        <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
       )}
 
       <MiniGEX ticker={ticker} spot={spot} />
