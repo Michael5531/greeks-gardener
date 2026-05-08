@@ -84,8 +84,8 @@ export default function Backtest() {
       toast.error("此策略暂不支持引擎回测，下方 Payoff 可视化可参考。");
       return;
     }
-    if (strategy === "custom" && customLegs.length === 0) {
-      toast.error("请至少添加一条 leg");
+    if (strategy === "custom") {
+      toast.info("Custom 策略请使用下方多腿计算器即时分析；引擎回测暂未支持自定义 legs。");
       return;
     }
     setRunning(true);
