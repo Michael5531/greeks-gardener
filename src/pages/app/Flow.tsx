@@ -430,11 +430,7 @@ export default function Flow() {
         </>
       )}
 
-      <OptionPricer
-        externalTicker={ticker}
-        strikeOptions={strikeOptions}
-        expirationOptions={expirations}
-      />
+      <OptionPricer externalTicker={ticker} />
     </div>
   );
 }
