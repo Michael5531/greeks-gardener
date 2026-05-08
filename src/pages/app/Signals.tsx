@@ -51,8 +51,8 @@ export default function Signals() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">策略信号</h1>
-          <p className="text-sm text-muted-foreground">基于规则扫描你的 Watchlist 并生成开仓建议（仅信号，不下单）</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.signalsExt.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.signalsExt.sub}</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={filter} onChange={e => setFilter(e.target.value)} className="h-9 text-xs bg-background border border-border rounded px-2">
