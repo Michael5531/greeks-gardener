@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Button } from "@/components/ui/button";
+import { Calculator, RefreshCw } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis, Legend, ComposedChart, Area } from "recharts";
 import ChartSizer from "@/components/charts/ChartSizer";
 import TickerSearch from "./TickerSearch";
@@ -23,8 +25,11 @@ export default function OptionPricer({ externalTicker }: OptionPricerProps = {})
 
   const { data: chain, expirations } = useOptionsChain(ticker || null);
   const [legs, setLegs] = useState<UILeg[]>([]);
-  // reset legs when ticker changes
-  useEffect(() => { setLegs([]); }, [ticker]);
+  const [armed, setArmed] = useState(false);
+  // reset legs + armed state when ticker changes
+  useEffect(() => { setLegs([]); setArmed(false); }, [ticker]);
+  // any leg edit re-arms (user must press "计算" again)
+  useEffect(() => { setArmed(false); }, [JSON.stringify(legs)]);
 
   const [pctMove, setPctMove] = useState(0);
   const [ivMove, setIvMove] = useState(0);
@@ -33,7 +38,7 @@ export default function OptionPricer({ externalTicker }: OptionPricerProps = {})
   const minDte = legs.length ? Math.min(...legs.map(l => dteFor(l.expiration))) : 30;
 
   const input = useMemo(() => {
-    if (!spot || !legs.length) return null;
+    if (!armed || !spot || !legs.length) return null;
     return {
       ticker: ticker || "",
       spot,
@@ -44,7 +49,7 @@ export default function OptionPricer({ externalTicker }: OptionPricerProps = {})
       pctMove, ivMove, daysPassed,
       withUnderlying: true,
     };
-  }, [ticker, spot, legs, pctMove, ivMove, daysPassed]);
+  }, [armed, ticker, spot, legs, pctMove, ivMove, daysPassed]);
 
   const { data: pr, loading } = useComputePricerMultileg(input);
   const curve = pr?.curve ?? [];
@@ -72,6 +77,26 @@ export default function OptionPricer({ externalTicker }: OptionPricerProps = {})
 
       <OptionLegsBuilder ticker={ticker} spot={spot} chain={chain} expirations={expirations} legs={legs} onChange={setLegs} />
 
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-[11px] text-muted-foreground">
+          {legs.length === 0 ? "请先添加 legs" :
+            armed ? (loading ? "正在后端计算…" : "已计算 · 调节滑块自动更新") :
+              "Legs 已就绪 · 点击下方“计算”开始"}
+        </div>
+        <Button
+          size="sm"
+          variant={armed ? "outline" : "default"}
+          disabled={!spot || !legs.length || loading}
+          onClick={() => setArmed(true)}
+          className="h-8"
+        >
+          {armed ? <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> : <Calculator className="h-3.5 w-3.5 mr-1.5" />}
+          {armed ? "重新计算" : "计算"}
+        </Button>
+      </div>
+
+    {armed && (
+      <>
       <div className="grid md:grid-cols-3 gap-4">
         <SliderField label={`标的变动: ${pctMove > 0 ? "+" : ""}${pctMove}%`} value={pctMove} min={-20} max={20} step={0.5} onChange={setPctMove} />
         <SliderField label={`IV 变动: ${ivMove > 0 ? "+" : ""}${ivMove}%`} value={ivMove} min={-30} max={30} step={1} onChange={setIvMove} />
@@ -130,6 +155,8 @@ export default function OptionPricer({ externalTicker }: OptionPricerProps = {})
       )}
 
       {loading && <div className="text-[11px] text-muted-foreground">计算中…</div>}
+      </>
+    )}
     </div>
   );
 }
