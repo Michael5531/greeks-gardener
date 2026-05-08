@@ -14,14 +14,16 @@ import { fmt } from "@/lib/optionUtils";
 
 export interface OptionPricerProps {
   externalTicker?: string | null;
+  externalSpot?: number | null;
 }
 
-export default function OptionPricer({ externalTicker }: OptionPricerProps = {}) {
+export default function OptionPricer({ externalTicker, externalSpot }: OptionPricerProps = {}) {
   const [internalTicker, setInternalTicker] = useState<string>("");
   const ticker = externalTicker ?? internalTicker;
   const showInternalSearch = externalTicker == null;
-  const { quote } = useLiveQuote(ticker || null, 5000);
-  const spot = quote?.price ?? null;
+  // Only fetch our own quote when no external one was provided.
+  const { quote } = useLiveQuote(externalSpot != null ? null : (ticker || null), 5000);
+  const spot = externalSpot ?? quote?.price ?? null;
 
   const { data: chain, expirations } = useOptionsChain(ticker || null);
   const [legs, setLegs] = useState<UILeg[]>([]);

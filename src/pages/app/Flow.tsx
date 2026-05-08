@@ -430,7 +430,7 @@ export default function Flow() {
         </>
       )}
 
-      <OptionPricer externalTicker={ticker} />
+      <OptionPricer externalTicker={ticker} externalSpot={spot} />
     </div>
   );
 }

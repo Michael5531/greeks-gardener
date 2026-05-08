@@ -153,7 +153,7 @@ export default function Backtest() {
       </div>
 
       {strategy === "custom" ? (
-        <OptionPricer externalTicker={ticker} />
+        <OptionPricer externalTicker={ticker} externalSpot={spot} />
       ) : (
         <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
       )}
