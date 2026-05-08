@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
       dte = 30, delta_target = 0.3, iv = 0.30,
       profit_take = 0.5, stop_loss = 2,
       iv_mode = "constant", // "constant" | "historical_atm"
+      custom_legs,
     } = body;
 
     // Pull daily aggregates from Polygon
@@ -141,7 +142,7 @@ Deno.serve(async (req) => {
       return S * Math.exp((r0 + 0.5 * sigma * sigma) * T - z * sigma * Math.sqrt(T));
     }
 
-    type LegSpec = { type: "call" | "put"; side: "long" | "short"; strikeOffsetPct: number };
+    type LegSpec = { type: "call" | "put"; side: "long" | "short"; strikeOffsetPct: number; absStrike?: number; dteOverride?: number; qty?: number };
     function specFor(strat: string): LegSpec[] {
       switch (strat) {
         case "long_call": return [{ type: "call", side: "long", strikeOffsetPct: 0 }];
@@ -156,7 +157,19 @@ Deno.serve(async (req) => {
         default: return [];
       }
     }
-    const specs = specFor(strategy_type);
+    let specs: LegSpec[] = specFor(strategy_type);
+    if (strategy_type === "custom") {
+      if (!Array.isArray(custom_legs) || !custom_legs.length) return json({ error: "custom_legs required for strategy=custom" }, 400);
+      const refSpot = bars[0].c;
+      specs = custom_legs.map((l: any) => ({
+        type: l.type, side: l.side,
+        strikeOffsetPct: 0,
+        absStrike: Number(l.strike),
+        dteOverride: Number(l.dte ?? dte),
+        qty: Number(l.qty ?? 1),
+      }));
+      void refSpot;
+    }
     if (!specs.length) return json({ error: `strategy '${strategy_type}' 暂不支持引擎回测` }, 400);
 
     function legPrice(S: number, K: number, T: number, type: "call" | "put", sigma: number) {
@@ -197,9 +210,10 @@ Deno.serve(async (req) => {
       if (!position) {
         const T = dte / 365;
         const legs = specs.map(s => {
-          const K = Math.round(S * (1 + s.strikeOffsetPct) * 100) / 100;
-          const premium = legPrice(S, K, T, s.type, sigma);
-          return { type: s.type, side: s.side, strike: K, entry_premium: premium };
+          const K = s.absStrike != null ? s.absStrike : Math.round(S * (1 + s.strikeOffsetPct) * 100) / 100;
+          const legT = (s.dteOverride ?? dte) / 365;
+          const premium = legPrice(S, K, legT, s.type, sigma);
+          return { type: s.type, side: s.side, strike: K, entry_premium: premium, qty: s.qty ?? 1 };
         });
         position = {
           entry_date: date, entry_spot: S, legs,
