@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fmt, fmtPct } from "@/lib/optionUtils";
 import { Radar } from "lucide-react";
+import { useT } from "@/i18n";
 
 /* Multi-strategy scanner. For each watchlist ticker we evaluate a set of rule-based
    setups and emit one signal per matching strategy. */
@@ -19,6 +20,7 @@ const STRATEGY_LABELS: Record<string, string> = {
 };
 
 export default function Signals() {
+  const t = useT();
   const [items, setItems] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [filter, setFilter] = useState<string>("all");
