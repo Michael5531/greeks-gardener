@@ -3,8 +3,10 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Activity, BarChart3, LineChart, TrendingUp, Boxes, Radar,
-  ArrowUpRight, ArrowDownRight, Zap, Layers, Sparkles, ArrowRight,
+  ArrowUpRight, ArrowDownRight, Zap, Layers, Sparkles, ArrowRight, ShieldCheck,
 } from "lucide-react";
+import { useT } from "@/i18n";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 const tape = [
   { s: "SPY",  p: 612.34, c: +0.82 },
@@ -19,21 +21,7 @@ const tape = [
   { s: "VIX",  p:  14.62, c: -3.10 },
 ];
 
-const modules = [
-  { k: "01", icon: Activity,  t: "3D Greeks 立体图谱", d: "Δ · Γ · Θ 在三维空间内实时旋转，整条期权链的风险结构一目了然。" },
-  { k: "02", icon: BarChart3, t: "GEX 市场微观结构",   d: "Gamma Exposure 分布、Zero Gamma、Pin Risk —— 看懂做市商的脚本。" },
-  { k: "03", icon: Layers,    t: "Order Flow 解码",     d: "实时大单、Sweep、Block 拆解，跟住聪明钱的脚步。" },
-  { k: "04", icon: LineChart, t: "策略回测引擎",        d: "Covered Call / Spread / Iron Condor，Sharpe、回撤、胜率全套。" },
-  { k: "05", icon: Radar,     t: "信号雷达",            d: "扫描自选池，按你的规则生成可执行开仓建议。" },
-  { k: "06", icon: Boxes,     t: "全市场期权链",        d: "Polygon.io 实时数据，IV、OI、Volume 与希腊字母同屏呈现。" },
-];
-
-const stats = [
-  { v: "8K+",  l: "美股标的" },
-  { v: "1M+",  l: "实时期权合约" },
-  { v: "<120ms", l: "端到端延时" },
-  { v: "24/7", l: "数据流守护" },
-];
+const moduleIcons = [Activity, BarChart3, Layers, LineChart, Radar, Boxes];
 
 // Mock GEX profile per ticker — strikes & gamma exposure (in $B)
 const GEX_DATA: Record<string, { spot: number; zeroG: number; strikes: { k: number; gex: number }[] }> = {
@@ -72,6 +60,13 @@ const GEX_DATA: Record<string, { spot: number; zeroG: number; strikes: { k: numb
 };
 
 export default function Index() {
+  const t = useT();
+  const stats = [
+    { v: "8K+",   l: t.home.stats.tickers },
+    { v: "1M+",   l: t.home.stats.contracts },
+    { v: "<120ms",l: t.home.stats.latency },
+    { v: "24/7",  l: t.home.stats.uptime },
+  ];
   const [gexTicker, setGexTicker] = useState<keyof typeof GEX_DATA>("SPY");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const gex = GEX_DATA[gexTicker];
@@ -94,15 +89,18 @@ export default function Index() {
       <header className="relative z-20 max-w-[1400px] mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
         <Logo />
         <div className="hidden md:flex items-center gap-7 text-sm text-muted-foreground font-mono uppercase tracking-wider">
-          <a className="hover:text-foreground transition-colors" href="#modules">Modules</a>
-          <a className="hover:text-foreground transition-colors" href="#tape">Market</a>
-          <a className="hover:text-foreground transition-colors" href="#stats">Engine</a>
+          <a className="hover:text-foreground transition-colors" href="#modules">{t.home.nav.modules}</a>
+          <a className="hover:text-foreground transition-colors" href="#tape">{t.home.nav.market}</a>
+          <a className="hover:text-foreground transition-colors" href="#about">{t.home.aboutTag}</a>
         </div>
-        <Link to="/auth">
-          <Button size="sm" className="font-mono uppercase tracking-wider">
-            Launch Terminal <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <LanguageSwitcher />
+          <Link to="/auth">
+            <Button size="sm" className="font-mono uppercase tracking-wider">
+              {t.home.nav.launch} <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </div>
       </header>
 
       {/* Live tape */}
@@ -127,26 +125,25 @@ export default function Index() {
           <div className="lg:col-span-8">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-card/60 text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-8">
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-              Polygon.io · Live Options Tape
+              {t.home.livePill}
             </div>
             <h1 className="text-[clamp(2.75rem,8vw,7.5rem)] font-bold tracking-[-0.04em] leading-[0.92]">
-              See the <em className="not-italic bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-primary)" }}>market</em>
+              {t.home.heroPre} <em className="not-italic bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-primary)" }}>{t.home.heroEm}</em>
               <br/>
-              <span className="text-muted-foreground/70">before</span> it moves.
+              <span className="text-muted-foreground/70">{t.home.heroPost}</span> {t.home.heroPostBefore}{t.home.heroPostEnd}
             </h1>
             <p className="mt-8 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-              OPTI-X 把整张美股期权链拆解成三维 Greeks、GEX 微观结构与可执行的策略信号 ——
-              一套为系统化交易者打造的市场洞察终端。
+              {t.home.heroBody}
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-3">
               <Link to="/auth">
                 <Button size="lg" className="glow font-mono uppercase tracking-wider h-12 px-7">
-                  开始使用 <ArrowUpRight className="h-4 w-4" />
+                  {t.home.cta} <ArrowUpRight className="h-4 w-4" />
                 </Button>
               </Link>
               <a href="#modules">
                 <Button size="lg" variant="outline" className="font-mono uppercase tracking-wider h-12 px-7">
-                  探索模块
+                  {t.home.explore}
                 </Button>
               </a>
             </div>
@@ -162,7 +159,7 @@ export default function Index() {
                   <span className="h-2 w-2 rounded-full bg-warning" />
                   <span className="h-2 w-2 rounded-full bg-bull" />
                 </div>
-                <span className="text-[10px] font-mono text-muted-foreground tracking-wider">{gexTicker} · 0DTE · GEX</span>
+                <span className="text-[10px] font-mono text-muted-foreground tracking-wider">{gexTicker} · {t.home.cardTag}</span>
               </div>
 
               {/* Ticker switcher */}
@@ -260,29 +257,33 @@ export default function Index() {
         <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
           <div>
             <div className="text-[11px] font-mono uppercase tracking-[0.3em] text-primary mb-3 flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5" /> 06 Modules
+              <Sparkles className="h-3.5 w-3.5" /> {t.home.sectionTag}
             </div>
             <h2 className="text-4xl md:text-6xl font-bold tracking-[-0.03em]">
-              一个终端，<br/>洞察整个期权市场。
+              {t.home.sectionTitle1}<br/>{t.home.sectionTitle2}
             </h2>
           </div>
           <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-            从希腊字母的微分变化，到聪明钱的下注路径 —— 每一个模块都为决策而生。
+            {t.home.sectionDesc}
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-xl overflow-hidden">
-          {modules.map(m => (
-            <div key={m.k} className="group relative p-7 bg-card/60 backdrop-blur hover:bg-card transition-colors min-h-[220px] flex flex-col">
-              <div className="flex items-start justify-between mb-8">
-                <m.icon className="h-6 w-6 text-primary" />
-                <span className="text-[10px] font-mono text-muted-foreground tracking-[0.2em]">{m.k}</span>
+          {t.home.modules.map((m, i) => {
+            const Icon = moduleIcons[i] ?? Activity;
+            const k = String(i + 1).padStart(2, "0");
+            return (
+              <div key={i} className="group relative p-7 bg-card/60 backdrop-blur hover:bg-card transition-colors min-h-[220px] flex flex-col">
+                <div className="flex items-start justify-between mb-8">
+                  <Icon className="h-6 w-6 text-primary" />
+                  <span className="text-[10px] font-mono text-muted-foreground tracking-[0.2em]">{k}</span>
+                </div>
+                <div className="text-xl font-semibold tracking-tight mb-2">{m.t}</div>
+                <div className="text-sm text-muted-foreground leading-relaxed">{m.d}</div>
+                <ArrowUpRight className="absolute bottom-6 right-6 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all" />
               </div>
-              <div className="text-xl font-semibold tracking-tight mb-2">{m.t}</div>
-              <div className="text-sm text-muted-foreground leading-relaxed">{m.d}</div>
-              <ArrowUpRight className="absolute bottom-6 right-6 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all" />
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* CTA */}
@@ -290,24 +291,54 @@ export default function Index() {
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at top right, hsl(165 90% 50% / 0.18), transparent 60%), radial-gradient(ellipse at bottom left, hsl(280 85% 65% / 0.15), transparent 60%)" }} />
           <div className="relative p-10 md:p-16 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
             <div>
-              <div className="text-[11px] font-mono uppercase tracking-[0.3em] text-muted-foreground mb-4">Ready when markets open</div>
+              <div className="text-[11px] font-mono uppercase tracking-[0.3em] text-muted-foreground mb-4">{t.home.ctaTag}</div>
               <h3 className="text-3xl md:text-5xl font-bold tracking-[-0.03em] leading-tight">
-                把直觉，<br className="md:hidden"/>升级为<span className="text-primary">系统</span>。
+                {t.home.ctaTitle1}<br className="md:hidden"/>{t.home.ctaTitle2}<span className="text-primary">{t.home.ctaTitle3}</span>{t.home.ctaTitle4}
               </h3>
             </div>
             <Link to="/auth">
               <Button size="lg" className="glow font-mono uppercase tracking-wider h-14 px-8 text-sm">
-                进入终端 <ArrowRight className="h-4 w-4" />
+                {t.home.ctaBtn} <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>
         </div>
       </section>
 
+      {/* ABOUT US */}
+      <section id="about" className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-10 pb-32">
+        <div className="grid lg:grid-cols-12 gap-10">
+          <div className="lg:col-span-5">
+            <div className="text-[11px] font-mono uppercase tracking-[0.3em] text-primary mb-3 flex items-center gap-2">
+              <ShieldCheck className="h-3.5 w-3.5" /> {t.home.aboutTag}
+            </div>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-[-0.03em] leading-[1.05]">
+              {t.home.aboutTitle}
+            </h2>
+          </div>
+          <div className="lg:col-span-7 space-y-6">
+            <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
+              {t.home.aboutBody}
+            </p>
+            <div className="rounded-xl border border-border bg-card/50 backdrop-blur p-6">
+              <div className="text-[11px] font-mono uppercase tracking-[0.25em] text-muted-foreground mb-2">{t.home.aboutMission}</div>
+              <p className="text-sm md:text-base text-foreground/90 leading-relaxed">{t.home.aboutMissionBody}</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {t.home.aboutPrinciples.map((p, i) => (
+                  <span key={i} className="text-[10px] font-mono uppercase tracking-[0.2em] px-2.5 py-1 rounded-full border border-border bg-background/60 text-muted-foreground">
+                    {p}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <footer className="relative z-10 border-t border-border">
         <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-8 flex flex-col md:flex-row items-center justify-between gap-3 text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-          <div>© OPTI-X · Options Intelligence Terminal</div>
-          <div>仅信号研究平台 · 不构成投资建议</div>
+          <div>{t.home.footerCopy}</div>
+          <div>{t.home.footerNote}</div>
         </div>
       </footer>
     </div>
