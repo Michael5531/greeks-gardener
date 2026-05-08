@@ -16,6 +16,7 @@ import { getOptionsChain, getSnapshot } from "@/lib/polygon";
 import { useComputeGEX } from "@/hooks/useComputeGEX";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import OptionLegsBuilder, { dteFor, type UILeg } from "@/components/OptionLegsBuilder";
+import OptionPricer from "@/components/OptionPricer";
 
 export default function Backtest() {
   const [selTicker, setSelTicker] = useSelectedTicker();
@@ -159,13 +160,10 @@ export default function Backtest() {
         </div>
       </div>
 
-      <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
-
-      {strategy === "custom" && (
-        <OptionLegsBuilder
-          ticker={ticker} spot={spot} chain={chainForLegs} expirations={chainExps}
-          legs={customLegs} onChange={setCustomLegs} defaultIv={iv}
-        />
+      {strategy === "custom" ? (
+        <OptionPricer externalTicker={ticker} />
+      ) : (
+        <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
       )}
 
       <MiniGEX ticker={ticker} spot={spot} />
