@@ -131,6 +131,13 @@ export const STRATEGIES: StrategyDef[] = [
     maxLossText: "(入股价 - Put Strike) - 净权利金", maxProfitText: "(Call Strike - 入股价) + 净权利金", breakevenText: "入股价 ± 净权利金",
     engineSupported: false,
   },
+  {
+    id: "custom", name: "Custom · 自选 Legs", category: "spread",
+    description: "从期权链选择任意 buy/sell legs，引擎按真实 strike + 到期日回测。",
+    legs: () => [],
+    maxLossText: "—", maxProfitText: "—", breakevenText: "—",
+    engineSupported: true,
+  },
 ];
 
 export function getStrategy(id: string) {
