@@ -1,177 +1,136 @@
-import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis, Legend, ComposedChart, Area } from "recharts";
 import ChartSizer from "@/components/charts/ChartSizer";
 import TickerSearch from "./TickerSearch";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
-import type { OptType } from "@/lib/blackScholes";
-import { useComputePricer } from "@/hooks/useComputePricer";
+import { useOptionsChain } from "@/hooks/useOptionsChain";
+import OptionLegsBuilder, { dteFor, type UILeg } from "@/components/OptionLegsBuilder";
+import { useComputePricerMultileg } from "@/hooks/useComputePricerMultileg";
 import { fmt } from "@/lib/optionUtils";
 
 export interface OptionPricerProps {
-  /** Auto-sync external ticker (e.g. from page selector). */
   externalTicker?: string | null;
-  /** Optional strike list for dropdown selection */
-  strikeOptions?: number[];
-  /** Optional expiration date list (YYYY-MM-DD) for DTE dropdown */
-  expirationOptions?: string[];
 }
 
-export default function OptionPricer({ externalTicker, strikeOptions, expirationOptions }: OptionPricerProps = {}) {
+export default function OptionPricer({ externalTicker }: OptionPricerProps = {}) {
   const [ticker, setTicker] = useState<string>(externalTicker ?? "");
   useEffect(() => { if (externalTicker) setTicker(externalTicker); }, [externalTicker]);
   const { quote } = useLiveQuote(ticker || null, 5000);
-  const livePrice = quote?.price ?? null;
+  const spot = quote?.price ?? null;
 
-  const [manualSpot, setManualSpot] = useState<string>("");
-  const spot = manualSpot ? +manualSpot : (livePrice ?? 100);
+  const { data: chain, expirations } = useOptionsChain(ticker || null);
+  const [legs, setLegs] = useState<UILeg[]>([]);
+  // reset legs when ticker changes
+  useEffect(() => { setLegs([]); }, [ticker]);
 
-  const [type, setType] = useState<OptType>("call");
-  const [dte, setDte] = useState(30);
-  const [strike, setStrike] = useState<string>("");
-  const [iv, setIv] = useState(30);
-  const [r, setR] = useState(4.5);
-
-  // Auto-pick first strike near spot when strike options provided
-  useEffect(() => {
-    if (!strikeOptions?.length) return;
-    const target = (livePrice ?? +manualSpot) || strikeOptions[0];
-    let best = strikeOptions[0], bd = Infinity;
-    for (const s of strikeOptions) { const d = Math.abs(s - target); if (d < bd) { bd = d; best = s; } }
-    setStrike(String(best));
-  }, [strikeOptions, livePrice]);
-
-  // Auto-pick nearest expiration ~30d
-  useEffect(() => {
-    if (!expirationOptions?.length) return;
-    const now = Date.now();
-    let best = expirationOptions[0], bd = Infinity;
-    for (const e of expirationOptions) {
-      const d = Math.abs((new Date(e).getTime() - now) / 86400000 - 30);
-      if (d < bd) { bd = d; best = e; }
-    }
-    const days = Math.max(1, Math.round((new Date(best).getTime() - now) / 86400000));
-    setDte(days);
-  }, [expirationOptions]);
-
-  const [pctMove, setPctMove] = useState(0); // -20..+20
-  const [ivMove, setIvMove] = useState(0);   // -30..+30
+  const [pctMove, setPctMove] = useState(0);
+  const [ivMove, setIvMove] = useState(0);
   const [daysPassed, setDaysPassed] = useState(0);
 
-  const K = strike ? +strike : Math.round(spot);
-  const sigma = iv / 100;
-  const rate = r / 100;
+  const minDte = legs.length ? Math.min(...legs.map(l => dteFor(l.expiration))) : 30;
 
-  const { data: pr } = useComputePricer(
-    Number.isFinite(spot) && spot > 0 && Number.isFinite(K) && K > 0 && sigma > 0 && dte > 0
-      ? { spot, strike: K, dte, iv: sigma, r: rate, type, pctMove, ivMove, daysPassed }
-      : null,
-  );
-  const current = pr?.current ?? 0;
-  const projected = pr?.projected ?? 0;
-  const dPrice = pr?.dPrice ?? 0;
-  const pnl = pr?.pnl ?? 0;
-  const greeks = pr?.greeks ?? { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
+  const input = useMemo(() => {
+    if (!spot || !legs.length) return null;
+    return {
+      ticker: ticker || "",
+      spot,
+      legs: legs.map(l => ({
+        type: l.type, side: l.side, strike: l.strike,
+        dte: dteFor(l.expiration), iv: l.iv, qty: l.qty, expiration: l.expiration,
+      })),
+      pctMove, ivMove, daysPassed,
+      withUnderlying: true,
+    };
+  }, [ticker, spot, legs, pctMove, ivMove, daysPassed]);
+
+  const { data: pr, loading } = useComputePricerMultileg(input);
   const curve = pr?.curve ?? [];
+  const underlying = pr?.underlying ?? [];
+  const greeks = pr?.greeks ?? { delta: 0, gamma: 0, theta: 0, vega: 0 };
+
+  // Merge underlying close into a separate chart series scaled to right axis.
+  const undMin = underlying.length ? Math.min(...underlying.map(u => u.c)) : 0;
+  const undMax = underlying.length ? Math.max(...underlying.map(u => u.c)) : 0;
 
   return (
     <div className="rounded-lg border border-border bg-card/40 p-4 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h3 className="text-sm font-semibold">期权价值计算器</h3>
-          <p className="text-[11px] text-muted-foreground">基于 Black–Scholes，单合约 = 100 股</p>
+          <h3 className="text-sm font-semibold">期权价值计算器 · 多腿</h3>
+          <p className="text-[11px] text-muted-foreground">从期权链选择 buy/sell legs · 单合约 = 100 股</p>
         </div>
-        <div className="w-64"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+        <div className="flex items-center gap-3">
+          {spot != null && <span className="font-mono text-xs text-muted-foreground">Spot ${spot.toFixed(2)}</span>}
+          <div className="w-64"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
-        <Field label={`Spot ${ticker ? `(${ticker})` : ""}`}>
-          <Input className="h-8 font-mono text-xs" placeholder={livePrice ? livePrice.toFixed(2) : "—"} value={manualSpot} onChange={e => setManualSpot(e.target.value)} />
-        </Field>
-        <Field label="类型">
-          <Select value={type} onValueChange={v => setType(v as OptType)}>
-            <SelectTrigger className="h-8 font-mono text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="call">Call</SelectItem>
-              <SelectItem value="put">Put</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Strike">
-          {strikeOptions?.length ? (
-            <Select value={strike} onValueChange={setStrike}>
-              <SelectTrigger className="h-8 font-mono text-xs"><SelectValue placeholder="选择" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {strikeOptions.map(s => <SelectItem key={s} value={String(s)} className="font-mono text-xs">{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input className="h-8 font-mono text-xs" placeholder={String(Math.round(spot))} value={strike} onChange={e => setStrike(e.target.value)} />
-          )}
-        </Field>
-        <Field label="到期 / DTE">
-          {expirationOptions?.length ? (
-            <Select
-              value={String(dte)}
-              onValueChange={(v) => setDte(+v)}
-            >
-              <SelectTrigger className="h-8 font-mono text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {expirationOptions.map(e => {
-                  const days = Math.max(1, Math.round((new Date(e).getTime() - Date.now()) / 86400000));
-                  return <SelectItem key={e} value={String(days)} className="font-mono text-xs">{e} ({days}d)</SelectItem>;
-                })}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input type="number" className="h-8 font-mono text-xs" value={dte} onChange={e => setDte(+e.target.value)} />
-          )}
-        </Field>
-        <Field label="IV %"><Input type="number" step="1" className="h-8 font-mono text-xs" value={iv} onChange={e => setIv(+e.target.value)} /></Field>
-        <Field label="Rate %"><Input type="number" step="0.1" className="h-8 font-mono text-xs" value={r} onChange={e => setR(+e.target.value)} /></Field>
-        <Stat label="当前理论价" value={`$${fmt(current)}`} />
-      </div>
+      <OptionLegsBuilder ticker={ticker} spot={spot} chain={chain} expirations={expirations} legs={legs} onChange={setLegs} />
 
       <div className="grid md:grid-cols-3 gap-4">
         <SliderField label={`标的变动: ${pctMove > 0 ? "+" : ""}${pctMove}%`} value={pctMove} min={-20} max={20} step={0.5} onChange={setPctMove} />
         <SliderField label={`IV 变动: ${ivMove > 0 ? "+" : ""}${ivMove}%`} value={ivMove} min={-30} max={30} step={1} onChange={setIvMove} />
-        <SliderField label={`时间流逝: ${daysPassed} 天`} value={daysPassed} min={0} max={Math.max(dte - 1, 1)} step={1} onChange={setDaysPassed} />
+        <SliderField label={`时间流逝: ${daysPassed} 天`} value={daysPassed} min={0} max={Math.max(minDte - 1, 1)} step={1} onChange={setDaysPassed} />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <Stat label="预测价" value={`$${fmt(projected)}`} />
-        <Stat label="价格变动" value={`${dPrice >= 0 ? "+" : ""}$${fmt(dPrice)}`} positive={dPrice >= 0} />
-        <Stat label="PnL / 张" value={`${pnl >= 0 ? "+" : ""}$${fmt(pnl)}`} positive={pnl >= 0} />
-        <Stat label="Δ" value={fmt(greeks.delta, 3)} />
-        <Stat label="Γ" value={fmt(greeks.gamma, 4)} />
-        <Stat label="Θ /day" value={`$${fmt(greeks.theta * 100)}`} />
+        <Stat label="组合现值" value={`$${fmt(pr?.currentValue ?? 0)}`} />
+        <Stat label="预测值" value={`$${fmt(pr?.projectedValue ?? 0)}`} />
+        <Stat label="ΔPnL" value={`${(pr?.dPrice ?? 0) >= 0 ? "+" : ""}$${fmt(pr?.dPrice ?? 0)}`} positive={(pr?.dPrice ?? 0) >= 0} />
+        <Stat label="净 Δ" value={fmt(greeks.delta, 3)} />
+        <Stat label="净 Γ" value={fmt(greeks.gamma, 4)} />
+        <Stat label="净 Θ /day" value={`$${fmt(greeks.theta * 100)}`} />
       </div>
 
-      <div className="h-72">
+      <div className="h-80">
         <ChartSizer>
           {({ width, height }) => (
-          <LineChart width={width} height={height} data={curve} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-            <CartesianGrid stroke="hsl(var(--grid-line))" />
-            <XAxis dataKey="price" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
-            <YAxis tickFormatter={v => `$${v}`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
-            <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any) => `$${v}`} labelFormatter={(l: any) => `Spot $${l}`} />
-            <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
-            <ReferenceLine x={+spot.toFixed(2)} stroke="hsl(var(--primary))" strokeDasharray="3 3" label={{ value: "now", fill: "hsl(var(--primary))", fontSize: 10 }} />
-            <Line type="monotone" dataKey="pnl" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-          </LineChart>
+            <ComposedChart width={width} height={height} data={curve} margin={{ top: 8, right: 50, left: 0, bottom: 8 }}>
+              <CartesianGrid stroke="hsl(var(--grid-line))" />
+              <XAxis dataKey="price" tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis yAxisId="pnl" tickFormatter={v => `$${v}`} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+              <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any, n: any) => [`$${v}`, n === "expiry" ? "到期 PnL" : "今日 PnL"]} labelFormatter={(l: any) => `Spot $${l}`} />
+              <Legend wrapperStyle={{ fontSize: 11, fontFamily: "JetBrains Mono" }} />
+              <ReferenceLine yAxisId="pnl" y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+              {spot != null && (
+                <ReferenceLine yAxisId="pnl" x={+spot.toFixed(2)} stroke="hsl(var(--primary))" strokeDasharray="3 3"
+                  label={{ value: `Spot $${spot.toFixed(2)}`, fill: "hsl(var(--primary))", fontSize: 10, position: "top" }} />
+              )}
+              {(pr?.breakevens ?? []).map((b, i) => (
+                <ReferenceLine yAxisId="pnl" key={i} x={b} stroke="hsl(var(--muted-foreground))" strokeDasharray="2 2" label={{ value: `BE $${b}`, fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+              ))}
+              <Line yAxisId="pnl" type="monotone" dataKey="expiry" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="到期 PnL" />
+              <Line yAxisId="pnl" type="monotone" dataKey="today" stroke="hsl(var(--accent))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="今日 PnL" />
+            </ComposedChart>
           )}
         </ChartSizer>
       </div>
+
+      {underlying.length > 0 && (
+        <div className="h-44">
+          <div className="text-[11px] text-muted-foreground mb-1">{ticker} 标的近 30 个交易日走势</div>
+          <ChartSizer>
+            {({ width, height }) => (
+              <LineChart width={width} height={height} data={underlying} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                <CartesianGrid stroke="hsl(var(--grid-line))" />
+                <XAxis dataKey="t" tick={{ fontSize: 9, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} minTickGap={40} />
+                <YAxis domain={[undMin * 0.99, undMax * 1.01]} tick={{ fontSize: 10, fontFamily: "JetBrains Mono", fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11, fontFamily: "JetBrains Mono" }} formatter={(v: any) => `$${v}`} />
+                {spot != null && <ReferenceLine y={spot} stroke="hsl(var(--primary))" strokeDasharray="3 3" label={{ value: `Spot $${spot.toFixed(2)}`, fill: "hsl(var(--primary))", fontSize: 10 }} />}
+                <Line type="monotone" dataKey="c" stroke="hsl(var(--bull))" strokeWidth={1.5} dot={false} />
+              </LineChart>
+            )}
+          </ChartSizer>
+        </div>
+      )}
+
+      {loading && <div className="text-[11px] text-muted-foreground">计算中…</div>}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><Label className="text-[10px] text-muted-foreground font-mono">{label}</Label>{children}</div>;
-}
 function SliderField({ label, value, min, max, step, onChange }: any) {
   return (
     <div>
