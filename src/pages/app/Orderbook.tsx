@@ -120,6 +120,13 @@ export default function Orderbook() {
   const lastQuote = quotes[0];
   const mid = lastQuote?.bid_price && lastQuote?.ask_price ? (lastQuote.bid_price + lastQuote.ask_price) / 2 : null;
   const spread = lastQuote?.bid_price && lastQuote?.ask_price ? lastQuote.ask_price - lastQuote.bid_price : null;
+  const tradeVol = useMemo(() => trades.reduce((a, t) => a + (t.size ?? 0), 0), [trades]);
+  const tradePxRange = useMemo(() => {
+    if (!trades.length) return null;
+    let lo = Infinity, hi = -Infinity;
+    for (const t of trades) { if (t.price < lo) lo = t.price; if (t.price > hi) hi = t.price; }
+    return { lo, hi };
+  }, [trades]);
 
   return (
     <div className="p-6 space-y-4">
@@ -183,8 +190,30 @@ export default function Orderbook() {
       </div>
 
       <div className="rounded-lg border border-border bg-card/40 p-4">
-        <div className="text-sm font-semibold mb-2">Trades 成交热力图 <span className="text-xs text-muted-foreground ml-2">颜色越亮 成交量越大 · 鼠标悬停查看详情</span></div>
-        <HeatmapCanvas points={tradePoints} width={1100} height={300} timeBinMs={Math.max(1000, windowMin * 60_000 / 220)} priceBin={0.05} colorMode="single" refPrice={mid} />
+        <div className="text-sm font-semibold mb-2 flex flex-wrap items-baseline gap-x-3">
+          <span>Trades 成交热力图</span>
+          <span className="text-xs text-muted-foreground">颜色越亮 成交量越大 · 悬停看详情</span>
+          <span className="ml-auto text-xs font-mono text-muted-foreground">
+            {trades.length.toLocaleString()} 笔 · 共 {tradeVol.toLocaleString()} 张
+            {tradePxRange && ` · 价区 $${tradePxRange.lo.toFixed(2)}–$${tradePxRange.hi.toFixed(2)}`}
+          </span>
+        </div>
+        {trades.length === 0 ? (
+          <div className="h-[200px] flex items-center justify-center text-xs text-muted-foreground font-mono text-center px-6">
+            该合约在所选 {windowMin} 分钟窗口内无成交。<br />
+            期权单一行权价的成交频率远低于报价更新 —— 可尝试拉长窗口、切换更近 ATM 的行权价,或选更活跃的标的(SPY / QQQ / NVDA)。
+          </div>
+        ) : (
+          <HeatmapCanvas
+            points={tradePoints}
+            width={1100}
+            height={300}
+            timeBinMs={Math.max(1000, windowMin * 60_000 / 220)}
+            priceBin={0.02}
+            colorMode="single"
+            refPrice={mid}
+          />
+        )}
       </div>
     </div>
   );
