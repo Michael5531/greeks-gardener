@@ -20,13 +20,26 @@ export default function Orderbook() {
   const [strike, setStrike] = useState<number | null>(null);
   const [strikes, setStrikes] = useState<number[]>([]);
   const [windowMin, setWindowMin] = useState(15);
+  // Tracks whether the user has manually picked a strike for the current
+  // (ticker, exp, side) tuple. Once true, we stop auto-snapping to ATM on
+  // every live-quote refresh — that was causing the strike to "jump" while
+  // the user was inspecting a contract.
+  const userPickedRef = useRef(false);
+
+  // Reset the manual-pick flag whenever the underlying selection context
+  // changes (new ticker / expiration / side). The next chain load is then
+  // free to auto-snap to ATM once.
+  useEffect(() => { userPickedRef.current = false; }, [ticker, exp, side]);
 
   // Auto-pick expiration: nearest in future
   useEffect(() => {
     if (expirations.length && !exp) setExp(expirations[0]);
   }, [expirations, exp]);
 
-  // Load contracts for selected expiration to get strike list
+  // Load contracts for selected expiration to get the strike list.
+  // IMPORTANT: do NOT depend on `quote?.price` — the live quote refreshes
+  // every few seconds and would otherwise re-run this effect and snap the
+  // user back to ATM, making the page unusable.
   useEffect(() => {
     if (!ticker || !exp) { setStrikes([]); return; }
     let cancelled = false;
@@ -34,15 +47,22 @@ export default function Orderbook() {
       if (cancelled) return;
       const ks = Array.from(new Set(rows.filter(r => r.details?.contract_type === side).map(r => r.details.strike_price))).sort((a, b) => a - b);
       setStrikes(ks);
-      // pick ATM
-      if (ks.length && quote?.price != null) {
-        let best = ks[0]; let d = Math.abs(ks[0] - quote.price);
-        for (const k of ks) { const dd = Math.abs(k - quote.price); if (dd < d) { d = dd; best = k; } }
-        setStrike(best);
-      } else if (ks.length) setStrike(ks[Math.floor(ks.length / 2)]);
+      if (!ks.length) { setStrike(null); return; }
+      // Keep the user's choice if still valid for this chain.
+      setStrike(prev => {
+        if (userPickedRef.current && prev != null && ks.includes(prev)) return prev;
+        const ref = quote?.price;
+        if (ref != null) {
+          let best = ks[0], d = Math.abs(ks[0] - ref);
+          for (const k of ks) { const dd = Math.abs(k - ref); if (dd < d) { d = dd; best = k; } }
+          return best;
+        }
+        return ks[Math.floor(ks.length / 2)];
+      });
     });
     return () => { cancelled = true; };
-  }, [ticker, exp, side, quote?.price]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, exp, side]);
 
   const optionTicker = useMemo(() => {
     if (!ticker || !exp || strike == null) return null;
@@ -128,7 +148,7 @@ export default function Orderbook() {
           </Tabs>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground font-mono">Strike</span>
-            <Select value={strike?.toString() ?? ""} onValueChange={(v) => setStrike(parseFloat(v))}>
+            <Select value={strike?.toString() ?? ""} onValueChange={(v) => { userPickedRef.current = true; setStrike(parseFloat(v)); }}>
               <SelectTrigger className="w-32 h-8 font-mono text-xs"><SelectValue placeholder="选择" /></SelectTrigger>
               <SelectContent className="max-h-80">{strikes.map(k => <SelectItem key={k} value={k.toString()} className="font-mono text-xs">{k}</SelectItem>)}</SelectContent>
             </Select>
