@@ -49,6 +49,7 @@ export function useComputePricerMultileg(input: MLPricerInput | null) {
     enabled,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("compute-pricer-multileg", { body: debounced });
       if (error) throw error;

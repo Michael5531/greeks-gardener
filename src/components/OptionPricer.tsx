@@ -131,7 +131,15 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
                   label={{ value: `Spot $${spot.toFixed(2)}`, fill: "hsl(var(--primary))", fontSize: 10, position: "top" }} />
               )}
               {(pr?.breakevens ?? []).map((b, i) => (
-                <ReferenceLine yAxisId="pnl" key={i} x={b} stroke="hsl(var(--muted-foreground))" strokeDasharray="2 2" label={{ value: `BE $${b}`, fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                <ReferenceLine
+                  yAxisId="pnl"
+                  key={i}
+                  x={b}
+                  stroke="hsl(var(--accent))"
+                  strokeWidth={1.5}
+                  strokeDasharray="6 3"
+                  label={{ value: `盈亏平衡 $${b}`, fontSize: 11, fontWeight: 600, fill: "hsl(var(--accent))", position: "insideTopRight" }}
+                />
               ))}
               <Line yAxisId="pnl" type="monotone" dataKey="expiry" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={tx.pricerExt.expiryPnl} />
               <Line yAxisId="pnl" type="monotone" dataKey="today" stroke="hsl(var(--accent))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name={tx.pricerExt.todayPnl} />
