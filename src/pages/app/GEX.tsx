@@ -78,8 +78,17 @@ export default function GEX() {
   const totalContracts = gex?.contractCount ?? 0;
   const totalOI = gex?.totalOI ?? 0;
 
-  // Build "rows" payload for AI (use simplified)
-  const rowsForAI = useMemo(() => strikePivot.map(r => ({ strike: r.strike })), [strikePivot]);
+  // Build "rows" payload for AI: net GEX per strike (sum across selected expirations)
+  const rowsForAI = useMemo(() => {
+    return strikePivot.map((r: any) => {
+      let callGex = 0, putGex = 0;
+      for (const k of Object.keys(r)) {
+        if (k.endsWith("__c")) callGex += Number(r[k]) || 0;
+        else if (k.endsWith("__p")) putGex += Number(r[k]) || 0; // already negative-signed
+      }
+      return { strike: r.strike, callGex, putGex, net: callGex + putGex };
+    });
+  }, [strikePivot]);
 
   async function runAIAnalysis() {
     if (!ticker || !strikePivot.length || !spot) {
@@ -99,7 +108,7 @@ export default function GEX() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ ticker, spot, expirations: selectedExps, totalGEX, zeroGamma, rows: rowsForAI }),
+      body: JSON.stringify({ ticker, spot, expirations: selectedExps, totalGEX, zeroGamma, rows: rowsForAI }),
         signal: ctrl.signal,
       });
       if (!resp.ok || !resp.body) {
