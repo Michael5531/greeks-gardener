@@ -93,11 +93,16 @@ Deno.serve(async (req) => {
     }
 
     const breakevens: number[] = [];
-    for (let i = 1; i < curve.length; i++) {
-      const a = curve[i - 1], c = curve[i];
-      if ((a.expiry <= 0 && c.expiry >= 0) || (a.expiry >= 0 && c.expiry <= 0)) {
+    // Only detect true sign changes; ignore flat-zero curves (e.g., legs without strike yet).
+    const maxAbs = Math.max(...curve.map(c => Math.abs(c.expiry)));
+    if (maxAbs > 1e-6) {
+      for (let i = 1; i < curve.length; i++) {
+        const a = curve[i - 1], c = curve[i];
+        const crosses = (a.expiry < 0 && c.expiry > 0) || (a.expiry > 0 && c.expiry < 0);
+        if (!crosses) continue;
         const denom = c.expiry - a.expiry || 1;
         breakevens.push(+(a.price + (c.price - a.price) * (-a.expiry / denom)).toFixed(2));
+        if (breakevens.length >= 4) break;
       }
     }
 
