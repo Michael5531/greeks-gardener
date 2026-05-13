@@ -366,6 +366,9 @@ export default function Flow() {
                     <th className="p-2 text-right cursor-pointer" onClick={() => togglePSort("price")}>price<SortIcon active={pSort.key==="price"} dir={pSort.dir} /></th>
                     <th className="p-2 text-right cursor-pointer" onClick={() => togglePSort("size")}>size<SortIcon active={pSort.key==="size"} dir={pSort.dir} /></th>
                     <th className="p-2 text-right cursor-pointer" onClick={() => togglePSort("premium")}>premium<SortIcon active={pSort.key==="premium"} dir={pSort.dir} /></th>
+                    <th className="p-2 text-right">IV</th>
+                    <th className="p-2 text-right">Vol</th>
+                    <th className="p-2 text-right">OI</th>
                     <th className="p-2 cursor-pointer" onClick={() => togglePSort("context")}>context<SortIcon active={pSort.key==="context"} dir={pSort.dir} /></th>
                   </tr>
                 </thead>
@@ -379,6 +382,9 @@ export default function Flow() {
                       <td className="p-2 text-right">{p.price?.toFixed(2)}</td>
                       <td className="p-2 text-right">{p.size?.toLocaleString()}</td>
                       <td className="p-2 text-right">${(p.premium/1000).toFixed(0)}K</td>
+                      <td className="p-2 text-right">{p.iv != null ? `${(p.iv * 100).toFixed(1)}%` : "—"}</td>
+                      <td className="p-2 text-right">{p.day_volume != null ? p.day_volume.toLocaleString() : "—"}</td>
+                      <td className="p-2 text-right">{p.open_interest != null ? p.open_interest.toLocaleString() : "—"}</td>
                       <td className={`p-2 ${p.context === "at ask" ? "text-bull" : p.context === "at bid" ? "text-bear" : "text-muted-foreground"}`}>{p.context}</td>
                     </tr>
                   ))}
@@ -409,6 +415,9 @@ export default function Flow() {
                       <th className="p-2 text-right cursor-pointer" onClick={() => toggleSSort("totalSize")}>size<SortIcon active={sSort.key==="totalSize"} dir={sSort.dir} /></th>
                       <th className="p-2 text-right cursor-pointer" onClick={() => toggleSSort("totalPremium")}>premium<SortIcon active={sSort.key==="totalPremium"} dir={sSort.dir} /></th>
                       <th className="p-2 text-right cursor-pointer" onClick={() => toggleSSort("price")}>price<SortIcon active={sSort.key==="price"} dir={sSort.dir} /></th>
+                      <th className="p-2 text-right">IV</th>
+                      <th className="p-2 text-right">Vol</th>
+                      <th className="p-2 text-right">OI</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -420,6 +429,9 @@ export default function Flow() {
                         <td className="p-2 text-right">{s.totalSize.toLocaleString()}</td>
                         <td className="p-2 text-right">${(s.totalPremium/1000).toFixed(0)}K</td>
                         <td className="p-2 text-right">{s.price?.toFixed(2)}</td>
+                        <td className="p-2 text-right">{s.iv != null ? `${(s.iv * 100).toFixed(1)}%` : "—"}</td>
+                        <td className="p-2 text-right">{s.day_volume != null ? s.day_volume.toLocaleString() : "—"}</td>
+                        <td className="p-2 text-right">{s.open_interest != null ? s.open_interest.toLocaleString() : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
