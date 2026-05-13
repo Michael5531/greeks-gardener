@@ -77,11 +77,13 @@ export default function Signals() {
               <th className="text-right">到期</th>
               <th className="text-right">Δ</th>
               <th className="text-right">IV</th>
+              <th className="text-right">Vol</th>
+              <th className="text-right">OI</th>
               <th className="text-right">Bid/Ask</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">暂无信号，点击"立即扫描"</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">暂无信号，点击"立即扫描"</td></tr>}
             {filtered.map(s => (
               <tr key={s.id} className="border-t border-border/50 hover:bg-secondary/30">
                 <td className="px-3 py-1.5">{s.created_at?.slice(0,16).replace("T"," ")}</td>
@@ -98,6 +100,8 @@ export default function Signals() {
                 <td className="text-right">{s.signal?.expiration}</td>
                 <td className="text-right">{fmt(s.signal?.delta, 3)}</td>
                 <td className="text-right">{fmtPct(s.signal?.iv)}</td>
+                <td className="text-right">{s.signal?.volume != null ? Number(s.signal.volume).toLocaleString() : "—"}</td>
+                <td className="text-right">{s.signal?.oi != null ? Number(s.signal.oi).toLocaleString() : "—"}</td>
                 <td className="text-right">{fmt(s.signal?.bid)}/{fmt(s.signal?.ask)}</td>
               </tr>
             ))}
