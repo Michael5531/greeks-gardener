@@ -51,6 +51,8 @@ Deno.serve(async (req) => {
           iv: c.implied_volatility,
           bid: c.last_quote?.bid,
           ask: c.last_quote?.ask,
+          volume: c.day?.volume ?? 0,
+          oi: c.open_interest ?? 0,
         });
 
         const cc = pick(calls, 0.30, 20, 45);
@@ -78,6 +80,8 @@ Deno.serve(async (req) => {
               delta: longLeg.greeks.delta - shortLeg.greeks.delta, iv: longLeg.implied_volatility,
               bid: (longLeg.last_quote?.bid ?? 0) - (shortLeg.last_quote?.ask ?? 0),
               ask: (longLeg.last_quote?.ask ?? 0) - (shortLeg.last_quote?.bid ?? 0),
+              volume: Math.min(longLeg.day?.volume ?? 0, shortLeg.day?.volume ?? 0),
+              oi: Math.min(longLeg.open_interest ?? 0, shortLeg.open_interest ?? 0),
               note: `买 ${longLeg.details.strike_price}C / 卖 ${shortLeg.details.strike_price}C`,
             },
           });
@@ -98,6 +102,8 @@ Deno.serve(async (req) => {
               delta: longPut.greeks.delta - shortPut.greeks.delta, iv: longPut.implied_volatility,
               bid: (longPut.last_quote?.bid ?? 0) - (shortPut.last_quote?.ask ?? 0),
               ask: (longPut.last_quote?.ask ?? 0) - (shortPut.last_quote?.bid ?? 0),
+              volume: Math.min(longPut.day?.volume ?? 0, shortPut.day?.volume ?? 0),
+              oi: Math.min(longPut.open_interest ?? 0, shortPut.open_interest ?? 0),
               note: `买 ${longPut.details.strike_price}P / 卖 ${shortPut.details.strike_price}P`,
             },
           });
@@ -116,6 +122,8 @@ Deno.serve(async (req) => {
               iv: (shortC.implied_volatility + shortP.implied_volatility) / 2,
               bid: (shortP.last_quote?.bid ?? 0) + (shortC.last_quote?.bid ?? 0),
               ask: (shortP.last_quote?.ask ?? 0) + (shortC.last_quote?.ask ?? 0),
+              volume: Math.min(shortC.day?.volume ?? 0, shortP.day?.volume ?? 0),
+              oi: Math.min(shortC.open_interest ?? 0, shortP.open_interest ?? 0),
               note: "中性区间 · 卖双边收权利金",
             },
           });
