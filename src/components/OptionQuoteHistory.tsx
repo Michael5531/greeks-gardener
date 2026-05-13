@@ -118,7 +118,7 @@ export default function OptionQuoteHistory({ open, onOpenChange, optionTicker, l
           {!error && chartData.length > 0 && (
             <ChartSizer>
               {({ width, height }) => (
-              <AreaChart width={width} height={height} data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 16 }}>
+              <AreaChart width={width} height={height} data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 28 }}>
                 <defs>
                   <linearGradient id="askFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="hsl(var(--bear))" stopOpacity={0.3} />
@@ -139,7 +139,8 @@ export default function OptionQuoteHistory({ open, onOpenChange, optionTicker, l
                   tick={{ fontSize: 12, fill: "hsl(var(--foreground))", fontFamily: "JetBrains Mono" }}
                   stroke="hsl(var(--muted-foreground))"
                   tickMargin={8}
-                  minTickGap={48}
+                  minTickGap={80}
+                  interval="preserveStartEnd"
                 />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))", fontFamily: "JetBrains Mono" }} stroke="hsl(var(--muted-foreground))" domain={["auto", "auto"]} />
                 <Tooltip
