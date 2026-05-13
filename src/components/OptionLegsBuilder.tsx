@@ -15,6 +15,8 @@ export interface UILeg {
   qty: number;
   iv: number;        // decimal
   mid?: number;      // bid/ask mid for display
+  volume?: number;
+  oi?: number;
 }
 
 export interface OptionLegsBuilderProps {
@@ -64,6 +66,8 @@ export default function OptionLegsBuilder({ ticker, spot, chain, expirations, le
       id: newId(), side: "long", type: "call", expiration: exp, strike: k, qty: 1,
       iv: c?.implied_volatility ?? defaultIv,
       mid: c?.last_quote ? (c.last_quote.bid + c.last_quote.ask) / 2 : undefined,
+      volume: c?.day?.volume,
+      oi: c?.open_interest,
     }]);
   }, [chain.length, expirations.length, spot]); // eslint-disable-line
 
@@ -76,6 +80,8 @@ export default function OptionLegsBuilder({ ticker, spot, chain, expirations, le
         const c = findContract(chain, merged.expiration, merged.strike, merged.type);
         if (c?.implied_volatility) merged.iv = c.implied_volatility;
         if (c?.last_quote) merged.mid = (c.last_quote.bid + c.last_quote.ask) / 2;
+        merged.volume = c?.day?.volume;
+        merged.oi = c?.open_interest;
       }
       return merged;
     });
@@ -112,6 +118,8 @@ export default function OptionLegsBuilder({ ticker, spot, chain, expirations, le
               <th className="px-1">Strike</th>
               <th className="px-1 text-right">Qty</th>
               <th className="px-1 text-right">IV</th>
+              <th className="px-1 text-right">Vol</th>
+              <th className="px-1 text-right">OI</th>
               <th className="px-1 text-right">Mid</th>
               <th className="px-1"></th>
             </tr>
@@ -159,6 +167,8 @@ export default function OptionLegsBuilder({ ticker, spot, chain, expirations, le
                     <Input type="number" min={1} value={l.qty} onChange={e => update(l.id, { qty: Math.max(1, +e.target.value || 1) })} className="h-7 text-[11px] w-16 text-right" />
                   </td>
                   <td className="px-1 text-right">{(l.iv * 100).toFixed(1)}%</td>
+                  <td className="px-1 text-right">{l.volume != null ? l.volume.toLocaleString() : "—"}</td>
+                  <td className="px-1 text-right">{l.oi != null ? l.oi.toLocaleString() : "—"}</td>
                   <td className="px-1 text-right">{l.mid != null ? `$${l.mid.toFixed(2)}` : "—"}</td>
                   <td className="px-1 text-right whitespace-nowrap">
                     <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copy(l.id)}><Copy className="h-3 w-3" /></Button>
@@ -168,7 +178,7 @@ export default function OptionLegsBuilder({ ticker, spot, chain, expirations, le
               );
             })}
             {!legs.length && (
-              <tr><td colSpan={8} className="text-center text-muted-foreground py-3">{tx.legs.loading}</td></tr>
+              <tr><td colSpan={10} className="text-center text-muted-foreground py-3">{tx.legs.loading}</td></tr>
             )}
           </tbody>
         </table>
