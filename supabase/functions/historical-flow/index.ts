@@ -48,11 +48,11 @@ Deno.serve(async (req) => {
     type Print = {
       time: number; ticker: string; underlying: string; strike: number; type: "call" | "put"; expiration: string;
       price: number; size: number; premium: number; context: "at bid" | "at ask" | "mid" | "no quote" | "above ask" | "below bid";
-      exchange: number;
+      exchange: number; iv: number | null; day_volume: number | null; open_interest: number | null;
     };
     const allPrints: Print[] = [];
     const contractStats: { ticker: string; volume: number; premium: number }[] = [];
-    const sweeps: { ticker: string; start: number; end: number; legs: number; totalSize: number; totalPremium: number; price: number; side: "buy" | "sell" | "mixed" }[] = [];
+    const sweeps: { ticker: string; start: number; end: number; legs: number; totalSize: number; totalPremium: number; price: number; side: "buy" | "sell" | "mixed"; iv: number | null; day_volume: number | null; open_interest: number | null }[] = [];
 
     for (const c of ranked) {
       const ot: string = c.details?.ticker ?? "";
@@ -60,6 +60,9 @@ Deno.serve(async (req) => {
       const strike = c.details?.strike_price ?? 0;
       const ctype = c.details?.contract_type === "put" ? "put" : "call";
       const exp = c.details?.expiration_date ?? "";
+      const cIv: number | null = typeof c.implied_volatility === "number" ? c.implied_volatility : null;
+      const cDayVol: number | null = typeof c.day?.volume === "number" ? c.day.volume : null;
+      const cOI: number | null = typeof c.open_interest === "number" ? c.open_interest : null;
 
       // fetch trades
       const trUrl = `${POLYGON_BASE}/v3/trades/${encodeURIComponent(ot)}?timestamp.gte=${fromNs}&timestamp.lte=${toNs}&order=asc&limit=${limitPerContract}&sort=timestamp&apiKey=${apiKey}`;
@@ -100,6 +103,7 @@ Deno.serve(async (req) => {
           allPrints.push({
             time: ts / 1_000_000, ticker: ot, underlying: ticker, strike, type: ctype, expiration: exp,
             price, size, premium, context, exchange: tr.exchange ?? 0,
+            iv: cIv, day_volume: cDayVol, open_interest: cOI,
           });
         }
       }
@@ -128,6 +132,7 @@ Deno.serve(async (req) => {
           sweeps.push({
             ticker: ot, start: ts0, end: (trades[j - 1].sip_timestamp ?? 0) / 1_000_000, legs,
             totalSize: size, totalPremium: prem, price: price0, side: "mixed",
+            iv: cIv, day_volume: cDayVol, open_interest: cOI,
           });
           i = j;
         } else { i++; }
