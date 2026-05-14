@@ -261,12 +261,12 @@ export default function OptionQuoteHistory({
   })), [spotDaily]);
 
   const optYDomain = useMemo<[number, number] | undefined>(() => {
-    if (!optKline.length) return undefined;
+    if (!displayOptKline.length) return undefined;
     let lo = Infinity, hi = -Infinity;
-    for (const d of optKline) { if (d.l < lo) lo = d.l; if (d.h > hi) hi = d.h; }
+    for (const d of displayOptKline) { if (d.l < lo) lo = d.l; if (d.h > hi) hi = d.h; }
     const pad = (hi - lo) * 0.08 || 1;
     return [Math.max(0, lo - pad), hi + pad];
-  }, [optKline]);
+  }, [displayOptKline]);
 
   const spotYDomain = useMemo<[number, number] | undefined>(() => {
     if (!spotKline.length) return undefined;
