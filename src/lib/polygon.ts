@@ -49,7 +49,8 @@ export async function callPolygon<T = any>(action: string, body: Record<string, 
     });
     if (error) throw error;
     if ((data as any)?.error) throw new Error((data as any).error);
-    if (ttl > 0) cache.set(key, { value: data, expiresAt: Date.now() + ttl });
+    const shouldCache = !((data as any)?.fallback && Array.isArray((data as any)?.results) && (data as any).results.length === 0);
+    if (ttl > 0 && shouldCache) cache.set(key, { value: data, expiresAt: Date.now() + ttl });
     return data;
   })().finally(() => { inflight.delete(key); });
 
