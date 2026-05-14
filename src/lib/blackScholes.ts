@@ -32,3 +32,22 @@ export function bsGreeks(S: number, K: number, T: number, r: number, sigma: numb
     - (type === "call" ? 1 : -1) * r * K * Math.exp(-r * T) * N((type === "call" ? 1 : -1) * d2)) / 365;
   return { delta, gamma, theta, vega };
 }
+
+/** Solve implied volatility from observed option price using bisection. */
+export function bsImpliedVol(price: number, S: number, K: number, T: number, r: number, type: OptType): number | null {
+  if (!(price > 0) || !(S > 0) || !(K > 0) || !(T > 0)) return null;
+  const intrinsic = Math.max(0, type === "call" ? S - K * Math.exp(-r * T) : K * Math.exp(-r * T) - S);
+  if (price < intrinsic - 1e-6) return null;
+  let lo = 1e-4, hi = 5;
+  let pLo = bsPrice(S, K, T, r, lo, type) - price;
+  let pHi = bsPrice(S, K, T, r, hi, type) - price;
+  if (pLo > 0) return lo;
+  if (pHi < 0) return hi;
+  for (let i = 0; i < 60; i++) {
+    const mid = 0.5 * (lo + hi);
+    const pMid = bsPrice(S, K, T, r, mid, type) - price;
+    if (Math.abs(pMid) < 1e-5) return mid;
+    if (pMid < 0) { lo = mid; pLo = pMid; } else { hi = mid; pHi = pMid; }
+  }
+  return 0.5 * (lo + hi);
+}
