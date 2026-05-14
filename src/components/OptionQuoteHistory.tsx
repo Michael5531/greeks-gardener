@@ -12,7 +12,7 @@ import {
 import ChartSizer from "@/components/charts/ChartSizer";
 import { getOptionQuotes, callPolygon } from "@/lib/polygon";
 import { fmt } from "@/lib/optionUtils";
-import { bsImpliedVol, bsGreeks, type OptType } from "@/lib/blackScholes";
+import { bsImpliedVol, bsGreeks, bsPrice, type OptType } from "@/lib/blackScholes";
 
 function todayISO() {
   const d = new Date();
@@ -52,10 +52,11 @@ export interface OptionQuoteHistoryProps {
   /** ISO yyyy-mm-dd */
   expiration?: string;
   type?: OptType;
+  initialIv?: number;
 }
 
 export default function OptionQuoteHistory({
-  open, onOpenChange, optionTicker, label, underlying, strike, expiration, type,
+  open, onOpenChange, optionTicker, label, underlying, strike, expiration, type, initialIv,
 }: OptionQuoteHistoryProps) {
   const [date, setDate] = useState<string>(todayISO());
   const [loading, setLoading] = useState(false);
@@ -66,6 +67,7 @@ export default function OptionQuoteHistory({
   const [spotDaily, setSpotDaily] = useState<any[]>([]); // daily underlying bars
   const [tab, setTab] = useState("intraday");
   const [historyRange, setHistoryRange] = useState<HistoryRange>("max");
+  const [historySource, setHistorySource] = useState<string>("aggs");
 
   async function loadIntraday() {
     if (!optionTicker) return;
@@ -109,15 +111,17 @@ export default function OptionQuoteHistory({
     try {
       const today = todayISO();
       const from = historyStartISO(historyRange);
-      const r = await callPolygon<{ option?: any[]; underlying?: any[]; fallback?: boolean; messages?: string[] }>("option-history-pair", {
+      const r = await callPolygon<{ option?: any[]; underlying?: any[]; option_source?: string; fallback?: boolean; messages?: string[] }>("option-history-pair", {
         option_ticker: optionTicker, underlying, from, to: today,
       });
       setOptDaily(r.option ?? []);
       setSpotDaily(r.underlying ?? []);
+      setHistorySource(r.option_source ?? "aggs");
       if (r.fallback && r.messages?.length) console.warn("[OptionQuoteHistory] partial history fallback", r.messages);
     } catch (e) {
       console.warn("[OptionQuoteHistory] loadHistory error", e);
       setOptDaily([]); setSpotDaily([]);
+      setHistorySource("aggs");
     }
   }
 
@@ -222,18 +226,47 @@ export default function OptionQuoteHistory({
     });
   }, [optDaily, spotDaily, strike, expiration, type]);
 
+  const modelIv = useMemo(() => {
+    const actual = optKline.map(d => d.iv).filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
+    if (actual.length) return actual.sort((a, b) => a - b)[Math.floor(actual.length / 2)] / 100;
+    return initialIv && initialIv > 0 ? initialIv : null;
+  }, [optKline, initialIv]);
+
+  const modeledKline = useMemo(() => {
+    if (!spotDaily.length || !strike || !expiration || !type || !modelIv) return [];
+    const expMs = new Date(expiration + "T16:00:00").getTime();
+    return spotDaily
+      .filter(b => b.t <= expMs)
+      .map(b => {
+        const T = Math.max((expMs - b.t) / (365 * 24 * 3600 * 1000), 1 / 365);
+        const prices = [b.o, b.h, b.l, b.c].map((s: number) => bsPrice(s, strike, T, 0.045, modelIv, type));
+        return {
+          t: b.t,
+          day: new Date(b.t).toISOString().slice(0, 10),
+          o: prices[0], h: Math.max(...prices), l: Math.min(...prices), c: prices[3], v: 0,
+          range: [Math.min(...prices), Math.max(...prices)] as [number, number],
+          iv: modelIv * 100,
+          spot: b.c,
+          source: "bs_model",
+        };
+      });
+  }, [spotDaily, strike, expiration, type, modelIv]);
+
+  const displayOptKline = optKline.length >= 30 || modeledKline.length <= optKline.length ? optKline : modeledKline;
+  const displayHistorySource = displayOptKline === modeledKline ? "bs_model" : historySource;
+
   const spotKline = useMemo(() => spotDaily.map(b => ({
     t: b.t, o: b.o, h: b.h, l: b.l, c: b.c,
     range: [b.l, b.h] as [number, number],
   })), [spotDaily]);
 
   const optYDomain = useMemo<[number, number] | undefined>(() => {
-    if (!optKline.length) return undefined;
+    if (!displayOptKline.length) return undefined;
     let lo = Infinity, hi = -Infinity;
-    for (const d of optKline) { if (d.l < lo) lo = d.l; if (d.h > hi) hi = d.h; }
+    for (const d of displayOptKline) { if (d.l < lo) lo = d.l; if (d.h > hi) hi = d.h; }
     const pad = (hi - lo) * 0.08 || 1;
     return [Math.max(0, lo - pad), hi + pad];
-  }, [optKline]);
+  }, [displayOptKline]);
 
   const spotYDomain = useMemo<[number, number] | undefined>(() => {
     if (!spotKline.length) return undefined;
@@ -391,29 +424,34 @@ export default function OptionQuoteHistory({
 
           <TabsContent value="history" className="space-y-3">
             <ChartCard title={`期权日 K 线（${HISTORY_LABEL[historyRange]}，按合约上市日期显示）`} height={280}>
-              {optKline.length === 0 ? (
+              {displayOptKline.length === 0 ? (
                 <div className="grid h-full place-items-center text-xs text-muted-foreground text-center px-4">
                   暂无历史 K 线；部分新上市或远月合约本身可能只有很短交易历史
                 </div>
               ) : (
-                <ChartSizer>{({ width, height }) => (
-                  <ComposedChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
-                    <CartesianGrid strokeOpacity={0.1} />
-                    <XAxis dataKey="t" type="category"
-                      tickFormatter={(t) => new Date(t).toISOString().slice(5, 10)}
-                      tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      minTickGap={40} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      domain={optYDomain ?? ["auto", "auto"]} width={50} tickFormatter={(v) => v.toFixed(2)} />
-                    <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11 }}
-                      labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
-                      formatter={(v: any, name: string) => {
-                        if (name === "range" && Array.isArray(v)) return [`${v[0].toFixed(2)} – ${v[1].toFixed(2)}`, "L–H"];
-                        return typeof v === "number" ? v.toFixed(3) : v;
-                      }} />
-                    <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
-                  </ComposedChart>
-                )}</ChartSizer>
+                <>
+                  <div className="mb-1 px-1 text-[10px] text-muted-foreground font-mono">
+                    {displayOptKline.length} 日 · {displayHistorySource === "bs_model" ? `BS 理论日K（IV=${((modelIv ?? 0) * 100).toFixed(1)}%）` : displayHistorySource === "quotes_mid_daily" ? "Bid/Ask mid 重建日K" : "Polygon 聚合日K"}
+                  </div>
+                  <ChartSizer className="h-[calc(100%-18px)] w-full min-h-0 min-w-0">{({ width, height }) => (
+                    <ComposedChart width={width} height={height} data={displayOptKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
+                      <CartesianGrid strokeOpacity={0.1} />
+                      <XAxis dataKey="t" type="category"
+                        tickFormatter={(t) => new Date(t).toISOString().slice(5, 10)}
+                        tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
+                        minTickGap={40} interval="preserveStartEnd" />
+                      <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
+                        domain={optYDomain ?? ["auto", "auto"]} width={50} tickFormatter={(v) => v.toFixed(2)} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11 }}
+                        labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
+                        formatter={(v: any, name: string) => {
+                          if (name === "range" && Array.isArray(v)) return [`${v[0].toFixed(2)} – ${v[1].toFixed(2)}`, "L–H"];
+                          return typeof v === "number" ? v.toFixed(3) : v;
+                        }} />
+                      <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                    </ComposedChart>
+                  )}</ChartSizer>
+                </>
               )}
             </ChartCard>
 
