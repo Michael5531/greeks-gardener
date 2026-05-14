@@ -19,7 +19,7 @@ export default function Orderbook() {
   const [side, setSide] = useState<"call" | "put">("call");
   const [strike, setStrike] = useState<number | null>(null);
   const [strikes, setStrikes] = useState<number[]>([]);
-  const [windowMin, setWindowMin] = useState(15);
+  const [windowMin, setWindowMin] = useState(60);
   // Tracks whether the user has manually picked a strike for the current
   // (ticker, exp, side) tuple. Once true, we stop auto-snapping to ATM on
   // every live-quote refresh — that was causing the strike to "jump" while
@@ -121,6 +121,11 @@ export default function Orderbook() {
   const mid = lastQuote?.bid_price && lastQuote?.ask_price ? (lastQuote.bid_price + lastQuote.ask_price) / 2 : null;
   const spread = lastQuote?.bid_price && lastQuote?.ask_price ? lastQuote.ask_price - lastQuote.bid_price : null;
   const tradeVol = useMemo(() => trades.reduce((a, t) => a + (t.size ?? 0), 0), [trades]);
+  const dayVol = snap?.day?.volume as number | undefined;
+  const dayVwap = snap?.day?.vwap as number | undefined;
+  const dayHigh = snap?.day?.high as number | undefined;
+  const dayLow = snap?.day?.low as number | undefined;
+  const oi = snap?.open_interest as number | undefined;
   const tradePxRange = useMemo(() => {
     if (!trades.length) return null;
     let lo = Infinity, hi = -Infinity;
@@ -168,13 +173,22 @@ export default function Orderbook() {
       )}
 
       {optionTicker && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <Stat label="合约" value={optionTicker.replace("O:", "")} mono />
-          <Stat label="Bid" value={lastQuote?.bid_price ? `$${lastQuote.bid_price.toFixed(2)} × ${lastQuote.bid_size}` : "—"} tone="bull" />
-          <Stat label="Ask" value={lastQuote?.ask_price ? `$${lastQuote.ask_price.toFixed(2)} × ${lastQuote.ask_size}` : "—"} tone="bear" />
-          <Stat label="Mid / Spread" value={mid != null ? `$${mid.toFixed(2)} / ${spread!.toFixed(2)}` : "—"} />
-          <Stat label="样本" value={`${quotes.length} Q / ${trades.length} T`} />
-        </div>
+        <>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <Stat label="合约" value={optionTicker.replace("O:", "")} mono />
+            <Stat label="Bid" value={lastQuote?.bid_price ? `$${lastQuote.bid_price.toFixed(2)} × ${lastQuote.bid_size}` : "—"} tone="bull" />
+            <Stat label="Ask" value={lastQuote?.ask_price ? `$${lastQuote.ask_price.toFixed(2)} × ${lastQuote.ask_size}` : "—"} tone="bear" />
+            <Stat label="Mid / Spread" value={mid != null ? `$${mid.toFixed(2)} / ${spread!.toFixed(2)}` : "—"} />
+            <Stat label={`窗口内 (${windowMin}m)`} value={`${quotes.length} Q / ${trades.length} T · ${tradeVol.toLocaleString()} 张`} />
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <Stat label="今日成交量 (Day Volume)" value={dayVol != null ? dayVol.toLocaleString() : "—"} tone="bull" />
+            <Stat label="未平仓 (Open Interest)" value={oi != null ? oi.toLocaleString() : "—"} />
+            <Stat label="今日 VWAP" value={dayVwap != null ? `$${dayVwap.toFixed(2)}` : "—"} />
+            <Stat label="今日 High / Low" value={dayHigh != null && dayLow != null ? `$${dayHigh.toFixed(2)} / $${dayLow.toFixed(2)}` : "—"} />
+            <Stat label="窗口成交占比" value={dayVol && dayVol > 0 ? `${((tradeVol / dayVol) * 100).toFixed(1)}%` : "—"} />
+          </div>
+        </>
       )}
 
       {!live && optionTicker && (
@@ -191,10 +205,11 @@ export default function Orderbook() {
 
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <div className="text-sm font-semibold mb-2 flex flex-wrap items-baseline gap-x-3">
-          <span>Trades 成交热力图</span>
+          <span>Trades 成交热力图 <span className="text-xs text-muted-foreground font-normal">· 仅显示最近 {windowMin} 分钟</span></span>
           <span className="text-xs text-muted-foreground">颜色越亮 成交量越大 · 悬停看详情</span>
           <span className="ml-auto text-xs font-mono text-muted-foreground">
-            {trades.length.toLocaleString()} 笔 · 共 {tradeVol.toLocaleString()} 张
+            窗口 {trades.length.toLocaleString()} 笔 / {tradeVol.toLocaleString()} 张
+            {dayVol != null && ` · 全天 ${dayVol.toLocaleString()} 张`}
             {tradePxRange && ` · 价区 $${tradePxRange.lo.toFixed(2)}–$${tradePxRange.hi.toFixed(2)}`}
           </span>
         </div>
