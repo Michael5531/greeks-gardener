@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { dteFor } from "@/components/OptionLegsBuilder";
+import { bsPrice } from "@/lib/blackScholes";
 
 export default function StrategyCard({
   strategyId, ticker, dte, iv, onBacktest,
@@ -69,14 +70,31 @@ export default function StrategyCard({
     ) ?? null;
   }, [chain, pickedExp, pickedStrike, firstLeg.type]);
 
-  // 选中合约后，自动把 mid 填入"当前市价"（仅当用户尚未手动填写）
+  // 链上 mid（可能是上一交易日收盘价，盘前/夜盘后会过时）
+  const staleMid = pickedContract?.last_quote
+    ? (pickedContract.last_quote.bid + pickedContract.last_quote.ask) / 2
+    : null;
+
+  // 用 BS 在"当前实时 spot"下重新定价：
+  //   IV 优先用链上 implied_volatility，否则用上层传入的 iv 假设
+  //   T = picked 到期日距离今天的天数 / 365
+  // 这能把"夜盘 spot 已涨到 230 但链 mid 还停留在昨日收盘"的情况修正过来。
+  const bsLivePrice = useMemo(() => {
+    if (!pickedContract || !pickedExp || !pickedStrike) return null;
+    const sigma = pickedContract.implied_volatility && pickedContract.implied_volatility > 0
+      ? pickedContract.implied_volatility
+      : iv;
+    const T = dteFor(pickedExp) / 365;
+    if (!(sigma > 0) || !(T > 0) || !(spot > 0)) return null;
+    return bsPrice(spot, +pickedStrike, T, 0.045, sigma, firstLeg.type);
+  }, [pickedContract, pickedExp, pickedStrike, spot, iv, firstLeg.type]);
+
+  // 选中合约后，自动把 BS 实时估值填入"当前市价"（优先 BS-live，兜底链上 mid）
   useEffect(() => {
-    if (!pickedContract?.last_quote) return;
-    const mid = (pickedContract.last_quote.bid + pickedContract.last_quote.ask) / 2;
-    if (Number.isFinite(mid) && mid > 0 && marketPremium === "") {
-      setMarketPremium(mid.toFixed(2));
-    }
-  }, [pickedContract]); // eslint-disable-line
+    if (marketPremium !== "") return;
+    const v = bsLivePrice ?? staleMid;
+    if (v != null && Number.isFinite(v) && v > 0) setMarketPremium(v.toFixed(2));
+  }, [bsLivePrice, staleMid]); // eslint-disable-line
 
   // Δ = 实际净 debit - 理论净 debit (按每股, 同 baseNetDebit 口径)
   const hasOverride = entryPremium !== "" && Number.isFinite(+entryPremium);
@@ -214,14 +232,19 @@ export default function StrategyCard({
             <div className="h-9 flex items-center px-2 rounded-md border border-border/40 bg-background/40 text-[11px] font-mono text-muted-foreground">
               {pickedContract ? (
                 <>
-                  Mid ${pickedContract.last_quote ? ((pickedContract.last_quote.bid + pickedContract.last_quote.ask) / 2).toFixed(2) : "—"}
+                  链 mid ${staleMid != null ? staleMid.toFixed(2) : "—"}
+                  <span className="mx-2">·</span>
+                  <span className="text-primary">BS 实时 ${bsLivePrice != null ? bsLivePrice.toFixed(2) : "—"}</span>
                   <span className="mx-2">·</span>
                   IV {pickedContract.implied_volatility != null ? `${(pickedContract.implied_volatility * 100).toFixed(1)}%` : "—"}
-                  <span className="mx-2">·</span>
-                  OI {pickedContract.open_interest?.toLocaleString?.() ?? "—"}
                 </>
               ) : "—"}
             </div>
+            {pickedContract && (
+              <div className="text-[10px] text-muted-foreground/80 font-mono leading-tight">
+                链 mid 可能是上一交易日收盘；BS 实时 = 用当前 spot ${fmt(spot)} 重算
+              </div>
+            )}
           </div>
         </div>
         <div className="space-y-1">
