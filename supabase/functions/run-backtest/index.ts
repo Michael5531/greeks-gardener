@@ -16,6 +16,36 @@ const NY_FMT = new Intl.DateTimeFormat("en-CA", {
 function nyDate(ts: number): string { return NY_FMT.format(new Date(ts)); } // YYYY-MM-DD
 function parseDateUTC(d: string): number { return Date.parse(d + "T00:00:00Z"); }
 
+// Polygon fetch with retry/backoff on 429 (rate limit) and transient 5xx.
+async function polyFetch(url: string, tries = 4): Promise<any> {
+  let lastErr: any = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url);
+      if (r.status === 429 || (r.status >= 500 && r.status < 600)) {
+        const wait = 1200 * Math.pow(2, i); // 1.2s, 2.4s, 4.8s, 9.6s
+        console.warn(`[polygon] ${r.status} — retry in ${wait}ms`);
+        await new Promise(res => setTimeout(res, wait));
+        continue;
+      }
+      const j = await r.json();
+      // Polygon sometimes returns 200 with status:"ERROR" + rate-limit message
+      if (j?.status === "ERROR" && typeof j?.error === "string" && j.error.toLowerCase().includes("maximum requests per minute")) {
+        const wait = 1500 * Math.pow(2, i);
+        console.warn(`[polygon] soft 429 — retry in ${wait}ms`);
+        await new Promise(res => setTimeout(res, wait));
+        lastErr = j;
+        continue;
+      }
+      return j;
+    } catch (e) {
+      lastErr = e;
+      await new Promise(res => setTimeout(res, 800 * (i + 1)));
+    }
+  }
+  throw new Error(typeof lastErr === "string" ? lastErr : (lastErr?.error || lastErr?.message || "polygon fetch failed after retries"));
+}
+
 function erf(x: number) {
   const sign = x < 0 ? -1 : 1;
   x = Math.abs(x);
@@ -138,8 +168,7 @@ Deno.serve(async (req) => {
 
     // Pull RAW (unadjusted) daily aggregates so prices match the chain/last-trade view.
     const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=false&sort=asc&limit=5000&apiKey=${apiKey}`;
-    const r = await fetch(url);
-    const data = await r.json();
+    const data = await polyFetch(url);
     if (!data.results?.length) return json({ error: "no price data", details: data }, 400);
 
     const bars: { t: number; c: number }[] = data.results.map((b: any) => ({ t: b.t, c: b.c }));
@@ -324,9 +353,20 @@ async function runSingleTrade(body: any, apiKey: string) {
 
   // Pull RAW daily bars across full window
   const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${entry_date}/${end_date}?adjusted=false&sort=asc&limit=5000&apiKey=${apiKey}`;
-  const resp = await fetch(url);
-  const data = await resp.json();
-  if (!data.results?.length) return json({ error: "no price data for ticker/window", details: data }, 400);
+  let data: any;
+  try { data = await polyFetch(url); }
+  catch (e: any) {
+    return json({
+      error: "Polygon 数据源暂时不可用（可能触发限速）。请等 30 秒重试，或缩小日期窗口。",
+      details: String(e?.message ?? e),
+    }, 429);
+  }
+  if (!data?.results?.length) {
+    const hint = data?.error?.toLowerCase?.().includes("maximum requests")
+      ? "Polygon 限速，请等 30–60 秒后再试。"
+      : `区间 ${entry_date} → ${end_date} 在 Polygon 上没有 ${ticker} 的日 K（可能是非交易日 / 未来日期 / 标的不存在）。`;
+    return json({ error: hint, details: data }, 400);
+  }
 
   const bars: { t: number; c: number; o: number; h: number; l: number; date: string }[] =
     data.results.map((b: any) => ({ t: b.t, c: b.c, o: b.o, h: b.h, l: b.l, date: nyDate(b.t) }));
