@@ -136,11 +136,11 @@ Deno.serve(async (req) => {
         const key = `snap:${body.ticker}`;
         const cachedR = await cachedFetchJson(key, ttl, async () => {
           const [prevR, minR] = await Promise.all([
-            fetch(`${POLYGON_BASE}/v2/aggs/ticker/${t}/prev?adjusted=true&apiKey=${apiKey}`),
-            fetch(`${POLYGON_BASE}/v2/aggs/ticker/${t}/range/1/minute/${from}/${to}?adjusted=true&sort=desc&limit=1&apiKey=${apiKey}`),
+            polygonFetchJson(`${POLYGON_BASE}/v2/aggs/ticker/${t}/prev?adjusted=true&apiKey=${apiKey}`),
+            polygonFetchJson(`${POLYGON_BASE}/v2/aggs/ticker/${t}/range/1/minute/${from}/${to}?adjusted=true&sort=desc&limit=1&apiKey=${apiKey}`),
           ]);
-          const prevJ = await prevR.json().catch(() => ({}));
-          const minJ = await minR.json().catch(() => ({}));
+          const prevJ = prevR.data ?? {};
+          const minJ = minR.data ?? {};
           return { data: { prevJ, minJ }, status: 200 };
         });
         const { prevJ, minJ } = cachedR.data;
@@ -178,8 +178,7 @@ Deno.serve(async (req) => {
           let pages = 0;
           const maxPages = body.expiration_date ? 6 : 20;
           while (next && pages < maxPages) {
-            const rr = await fetch(next);
-            const dd = await rr.json();
+            const { data: dd } = await polygonFetchJson(next);
             if (Array.isArray(dd.results)) all.push(...dd.results);
             pages++;
             next = dd.next_url ? `${dd.next_url}&apiKey=${apiKey}` : "";
@@ -195,8 +194,7 @@ Deno.serve(async (req) => {
           let next = `${POLYGON_BASE}/v3/reference/options/contracts?underlying_ticker=${encodeURIComponent(body.ticker)}&limit=1000&expired=false&apiKey=${apiKey}`;
           let pages = 0;
           while (next && pages < 10) {
-            const rr = await fetch(next);
-            const dd = await rr.json();
+            const { data: dd } = await polygonFetchJson(next);
             for (const c of dd.results ?? []) {
               if (c.expiration_date) seen.add(c.expiration_date);
             }
