@@ -66,6 +66,7 @@ export default function OptionQuoteHistory({
   const [spotDaily, setSpotDaily] = useState<any[]>([]); // daily underlying bars
   const [tab, setTab] = useState("intraday");
   const [historyRange, setHistoryRange] = useState<HistoryRange>("max");
+  const [historySource, setHistorySource] = useState<string>("aggs");
 
   async function loadIntraday() {
     if (!optionTicker) return;
@@ -109,15 +110,17 @@ export default function OptionQuoteHistory({
     try {
       const today = todayISO();
       const from = historyStartISO(historyRange);
-      const r = await callPolygon<{ option?: any[]; underlying?: any[]; fallback?: boolean; messages?: string[] }>("option-history-pair", {
+      const r = await callPolygon<{ option?: any[]; underlying?: any[]; option_source?: string; fallback?: boolean; messages?: string[] }>("option-history-pair", {
         option_ticker: optionTicker, underlying, from, to: today,
       });
       setOptDaily(r.option ?? []);
       setSpotDaily(r.underlying ?? []);
+      setHistorySource(r.option_source ?? "aggs");
       if (r.fallback && r.messages?.length) console.warn("[OptionQuoteHistory] partial history fallback", r.messages);
     } catch (e) {
       console.warn("[OptionQuoteHistory] loadHistory error", e);
       setOptDaily([]); setSpotDaily([]);
+      setHistorySource("aggs");
     }
   }
 
