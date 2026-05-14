@@ -1,86 +1,97 @@
-# 计划：多腿期权构建器 + 性能优化 + 需求文档
+## 问题诊断
 
-## 1. 多腿构建器（共用组件）
+当前 `Backtest.tsx` + `run-backtest` edge function 存在的真实问题：
 
-新建 `src/components/OptionLegsBuilder.tsx`：
-- 输入：`ticker`、`spot`、来自 `useOptionsChain(ticker)` 的 `chainData` + `expirations`
-- 每条 leg 字段：`side(buy/sell)`、`type(call/put)`、`expiration`（下拉，全部到期日）、`strike`（按所选到期过滤）、`qty`、（自动带出）`mid/last/iv`
-- 操作：➕ 添加 leg、🗑 删除、复制
-- 输出 `onChange(legs[])`
+1. **Underlying 价格不准/对不上**
+   - Polygon aggregates 用 `adjusted=true`，会被股息/拆股回填，跟用户在期权链/Dashboard 看到的实时价格存在偏差。
+   - 回测结果只画 `equity_curve`（cash），从没把 underlying 同期 K 线/收盘价画出来，用户没法对照。
+   - 时间戳用 `new Date(bar.t).toISOString().slice(0,10)`，UTC 截断，美东收盘日有时会偏一天。
 
-底层逻辑：从 `chainData` 按 `expiration` 分组生成 strike 列表，并把每条 leg 自动取它在 chain 中的 `mid = (bid+ask)/2`、`iv`、`delta` 显示在行内。
+2. **PnL 计算可疑**
+   - 持仓期间 `cash` 不动，`equity.push({date, value: cash})` 是平的，只在平仓那天跳一次 → 曲线"阶梯化"不像真实 MTM。
+   - profit_take / stop_loss 对 credit 策略的判定写得绕，容易误触发。
 
-## 2. 期权价值计算器（在历史期权流页面 `Flow.tsx` 中嵌入的 `OptionPricer.tsx`）
+3. **缺少用户期望的输入**
+   - 没有"假设买入时间点 / 买入价格"
+   - 没有 BS 未来定价的完整模型参数（r、σ、q 股息、未来 IV 路径）
+   - 没法看单笔合约从买入到到期的 option price / Greeks 演化
 
-把当前单腿 UI 改为「多腿模式」：
-- 顶部保留 ticker / spot
-- 用 `OptionLegsBuilder` 替换 `Strike/类型/DTE/IV` 四个字段
-- 调用新的后端 `compute-pricer-multileg`（见 §4）→ 返回：
-  - `currentValue`（组合现值）
-  - `projectedValue`（在 ±%spot, ±%IV, days passed 模拟下）
-  - 整组 `greeks` 聚合
-  - `curve`：Spot 在 `[0.7·spot, 1.3·spot]` 81 点上的「到期 PnL」+「今日 PnL」
-  - `underlying`：过去 30 个交易日 spot 走势（用于在同一图叠加价格线）
-- 图表：左轴 PnL，右轴 underlying 价格；保留 `<ReferenceLine x={spot}>` 红色虚线（**确保 spot 线被画出**）
+---
 
-## 3. 策略回测 `Backtest.tsx`
+## 方案
 
-- 在策略下拉中新增 `custom` 选项；选中时显示同一个 `OptionLegsBuilder`
-- `run()` 时如果是 `custom`，把 legs 数组发到 `run-backtest`（扩展 body：`legs?: Leg[]`）
-- `run-backtest` 中接收 `legs` → 用每条 leg 的真实 `expiration / strike` 在每个 bar 上估值（沿用 BS）；其余指标流程不变
-- `MiniGEX` 与 `StrategyCard` 中 **强制保留 spot 红色虚线**（已在 StrategyCard 中存在 `x={spot}`，确保不被覆盖）
+### A. 后端 `run-backtest` 重写（保持向后兼容，新增 `mode`）
 
-## 4. 后端新增/修改
+新增 `mode: "single_trade"`（默认仍是旧的 `"strategy_loop"`，保留历史回测列表能继续显示）：
 
-新建 `supabase/functions/compute-pricer-multileg/index.ts`：
-- 入参：`{ ticker, spot, legs:[{type, side, strike, expiration|dte, iv, qty}], pctMove, ivMove, daysPassed, withUnderlying?:boolean }`
-- 用 `_shared/blackScholes.ts` 计算每条 leg 现值、聚合 PnL、聚合 greeks、生成 curve
-- 当 `withUnderlying=true` 时，调用 polygon `aggs/1/day` 拉过去 30 天 close 一并返回
-- 缓存键 = `ticker|spot|sha(legs)|pctMove|ivMove|daysPassed`，TTL 60s
+入参（single_trade）：
+```ts
+{
+  mode: "single_trade",
+  ticker, entry_date,                // 必填
+  entry_spot_override?: number,      // 可选，留空则用 entry_date 当日 close
+  legs: [{ type, side, strike, expiration, qty, entry_premium? }],
+  bs: { r: number, q: number, iv: number, iv_path?: "constant"|"realized" },
+  end_date?: string,                 // 默认 = 最远到期日
+}
+```
 
-修改 `supabase/functions/run-backtest/index.ts`：
-- 在 `specFor` 之外，增加 `customLegs` 分支：直接把前端传来的 legs 转换成内部 `LegSpec`（支持绝对 strike 与到期日）
+执行：
+1. 拉 Polygon `aggs/.../range/1/day/{entry_date}/{end_date}` **`adjusted=false`**（原始价，与盘面一致），按 `America/New_York` 把 `t` → 交易日字符串，避免时区漂移。
+2. 入场：`S0 = entry_spot_override ?? bars[0].c`；每条 leg 若没传 `entry_premium`，用 BS(`S0, K, T0, r, iv, type`) 自动算。
+3. 每日循环：
+   - `T = max((expiry - bar_date)/365, 1/365)`
+   - 每条 leg 计算 BS price + Greeks（Δ Γ Θ Vega）
+   - 组合 MTM = Σ side_sign × (now_premium − entry_premium) × qty × 100
+   - 输出每日 `{date, spot, leg_prices[], net_premium, pnl, delta, gamma, theta, vega}`
+4. 到期日：内在价值收敛；之后不再产生数据点。
+5. 不写 `backtests` 表（这是 what-if，不污染历史回测列表），直接把结果回给前端。
 
-## 5. 性能问题分析与修复
+**Underlying 准确性的修复同时下沉到旧的 strategy_loop 路径**：`adjusted=false` + 纽约时区日历。
 
-**用户感知慢的真实原因（按影响排序）**：
+### B. 前端 `Backtest.tsx`
 
-1. **Edge function cold-start**：日志显示 polygon-proxy / compute-* 频繁 `boot` + `shutdown`（~20–30ms 启动 + Supabase 转发开销 ~200–400ms）。每次参数改动都触发新的调用。
-2. **客户端无防抖**：滑动 IV / pctMove 滑块时，每次 onChange 都立即 `invoke`，很容易并发 5–10 个请求把后端打慢。
-3. **`useComputePricer` 只用 `useRef` 比较 key，没用 react-query**：浏览器跨组件无共享缓存。
-4. **`compute-cache` 表 RLS / 索引**：确认 `(kind, cache_key)` 唯一索引存在，避免 upsert 全表扫描。
+在策略选择栏旁加一个 Tab：
+- `策略循环回测`（现有功能，修过 underlying 准确性）
+- `单笔合约推演`（新增，对应 single_trade）
 
-**修复**：
-- 在 `useComputePricer` / `useComputePayoff` / `useComputeGEX` / `useComputeIVSurface` 上加 **300ms debounce**
-- 把这 4 个 hook 改为 `@tanstack/react-query`（项目已装），`staleTime: 60_000`，自动跨组件共享
-- Edge function 响应增加 HTTP `Cache-Control: public, max-age=30, stale-while-revalidate=60`，让浏览器/CDN 复用
-- 检查并补 `compute_cache` 上 `(kind, cache_key)` 唯一约束（如缺则 migration 加上）
-- 告知用户：如仍慢，可在 Lovable Cloud → Backend → Advanced settings 升级实例规格以减少 cold-start
+单笔推演面板字段：
+- 标的（沿用全局选中）
+- 假设买入日期（DatePicker，默认 30 天前最近交易日）
+- 买入价（可选，留空=当日收盘；显示当日 close 作为 placeholder）
+- Legs builder：复用 `OptionLegsBuilder`（已有 type/side/strike/expiration/qty/iv）
+- BS 参数：r（默认 0.045）、q（默认 0）、IV（默认取 leg 自身 IV）、未来 IV 路径（恒定/已实现波动率，先实现"恒定"，realized 留 TODO）
+- 推演结束日期（默认 = 最远到期）
 
-## 6. 需求文档
+结果区：
+- 顶部 KPI：当前 PnL、最大盈亏、距到期天数、净 Δ/Γ/Θ/Vega
+- 主图：双 Y 轴线图 — 左轴 Option 组合 MTM（$），右轴 Underlying 收盘价（同区间，原始价）
+- 副图：Greeks 演化（4 条线）
+- 表格：每日明细可下载（前端 CSV 导出）
 
-新建 `.lovable/requirements.md`，包含：
-- 多腿构建器交互规范（字段、来源、校验）
-- 期权价值计算器与回测的统一数据流图
-- 后端 `compute-pricer-multileg` 接口契约（请求/响应 JSON schema）
-- spot 参考线规范（颜色 `hsl(var(--primary))`，`strokeDasharray="3 3"`，label `Spot $X.XX`）
-- 性能 SLO：单次计算 P50 < 400ms，缓存命中 < 80ms
+### C. 字符串/i18n 与一致性
 
-## 改动文件清单
+- `pricerExt` 里加几个新 key（entryDate / entryPrice / bsParams / divYield / forwardIv / singleTrade）
+- 同步 `zh.ts` + `en.ts`
 
-新增
-- `src/components/OptionLegsBuilder.tsx`
-- `supabase/functions/compute-pricer-multileg/index.ts`
-- `.lovable/requirements.md`
-- `supabase/migrations/<ts>_compute_cache_unique.sql`（如缺约束）
+---
 
-修改
-- `src/components/OptionPricer.tsx` — 单腿 → 多腿
-- `src/pages/app/Backtest.tsx` — 加 custom 策略 + 传 legs
-- `src/components/StrategyCard.tsx` — 确认 spot 线
-- `src/hooks/useComputePricer.ts` / `useComputePayoff.ts` / `useComputeGEX.ts` / `useComputeIVSurface.ts` — debounce + react-query
-- `supabase/functions/run-backtest/index.ts` — 接收 custom legs
+## 技术要点
 
-## 不改动
-- 全局布局 / 路由 / 认证 / 其它页面
-- 已修复的移动端 ChartSizer 逻辑
+- **时区**：用 `Intl.DateTimeFormat('en-US', {timeZone:'America/New_York', ...})` 把 epoch ms 转日期字符串，确保跟期权链、Polygon 显示日历一致。
+- **adjusted=false**：保持与用户在 Chain/Dashboard 看到的 last trade 一致。BS 估值不需要复权价。
+- **缓存**：single_trade 不进 cache（输入空间太大、等价于即时计算），strategy_loop 维持现状。
+- **不动数据库**：不需要新表/迁移；`backtests` 表保留给策略循环回测。
+- **多腿 Greeks**：long sign=+1，short sign=-1，组合 Greek = Σ sign × greek × qty。
+
+---
+
+## 文件改动清单
+
+- `supabase/functions/run-backtest/index.ts` — 新增 `mode` 分支 + single_trade 实现 + adjusted=false + NY 时区日历
+- `src/pages/app/Backtest.tsx` — 顶部 Tabs，新增 `<SingleTradeSim />` 子组件
+- `src/components/SingleTradeSim.tsx` — 新组件（输入面板 + 双轴主图 + Greeks 副图 + 明细表）
+- `src/i18n/zh.ts`、`src/i18n/en.ts` — 文案
+- 不新建表，不改 RLS
+
+完成后用 `curl_edge_functions` 跑一次 single_trade 验证返回结构，再在前端核对图表对齐。
