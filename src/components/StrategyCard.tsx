@@ -6,6 +6,9 @@ import { useComputePayoff } from "@/hooks/useComputePayoff";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { supabase } from "@/integrations/supabase/client";
 import { fmt, fmtPct } from "@/lib/optionUtils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function StrategyCard({
   strategyId, ticker, dte, iv,
@@ -16,11 +19,38 @@ export default function StrategyCard({
 
   const { data: po } = useComputePayoff(strategyId, spot, iv, dte);
   const legs = po?.legs ?? [];
-  const grid = po?.grid ?? [];
-  const breakevens = po?.breakevens ?? [];
-  const maxProfit = po?.maxProfit ?? 0;
-  const maxLoss = po?.maxLoss ?? 0;
-  const netDebit = po?.netDebit ?? 0;
+  const baseGrid = po?.grid ?? [];
+  const baseBreakevens = po?.breakevens ?? [];
+  const baseNetDebit = po?.netDebit ?? 0;
+
+  // 买入合约 (实际成交) — 用于覆写理论 BS 入场价，重算 PnL。
+  // entryDate 仅作信息展示 (DTE 已在策略参数中)。
+  const [entryDate, setEntryDate] = useState<string>("");
+  const [entryPremium, setEntryPremium] = useState<string>(""); // 每股 (×100 = 每张)
+
+  // Δ = 实际净 debit - 理论净 debit (按每股, 同 baseNetDebit 口径)
+  const hasOverride = entryPremium !== "" && Number.isFinite(+entryPremium);
+  const actualNetDebit = hasOverride ? +entryPremium : baseNetDebit;
+  const shift = (actualNetDebit - baseNetDebit) * 100; // 多头入场价升高 ⇒ PnL 下移
+  const grid = hasOverride
+    ? baseGrid.map(g => ({ price: g.price, expiry: +(g.expiry - shift).toFixed(2), today: +(g.today - shift).toFixed(2) }))
+    : baseGrid;
+  const breakevens = hasOverride
+    ? (() => {
+        const out: number[] = [];
+        for (let i = 1; i < grid.length; i++) {
+          const a = grid[i - 1], b = grid[i];
+          if ((a.expiry <= 0 && b.expiry >= 0) || (a.expiry >= 0 && b.expiry <= 0)) {
+            const denom = b.expiry - a.expiry || 1;
+            out.push(+(a.price + (b.price - a.price) * (-a.expiry / denom)).toFixed(2));
+          }
+        }
+        return out;
+      })()
+    : baseBreakevens;
+  const maxProfit = grid.length ? Math.max(...grid.map(g => g.expiry)) : 0;
+  const maxLoss = grid.length ? Math.min(...grid.map(g => g.expiry)) : 0;
+  const netDebit = actualNetDebit;
 
   const [hist, setHist] = useState<{ winRate: number | null; avgRet: number | null; n: number }>({ winRate: null, avgRet: null, n: 0 });
   useEffect(() => {
@@ -74,6 +104,36 @@ export default function StrategyCard({
             {l.side === "long" ? "+" : "-"}{l.qty} {l.type.toUpperCase()} @ {l.strike} (${fmt(l.entryPrice)})
           </span>
         ))}
+      </div>
+
+      {/* 实际买入合约 — 覆写理论 BS 入场价，重算到期/今日 PnL 曲线 */}
+      <div className="rounded-md border border-border/60 bg-background/30 p-3 grid md:grid-cols-4 gap-3 items-end">
+        <div className="md:col-span-4 text-[11px] text-muted-foreground -mb-1">
+          实际买入合约（可选）：填入后将以实际成交价重算 PnL，理论 BS 价仅作参考。
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">买入日期</Label>
+          <DatePicker value={entryDate} onChange={setEntryDate} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">
+            买入合约价 / 股 · 留空=理论 ${fmt(baseNetDebit)}
+          </Label>
+          <Input className="font-mono" placeholder={`${fmt(baseNetDebit)}`} value={entryPremium}
+            onChange={e => setEntryPremium(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">每张成本 (×100)</Label>
+          <div className="font-mono text-sm h-9 flex items-center px-2 rounded-md border border-border/40 bg-background/40">
+            ${fmt(Math.abs(actualNetDebit) * 100)}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">相对理论 Δ</Label>
+          <div className={`font-mono text-sm h-9 flex items-center px-2 rounded-md border border-border/40 bg-background/40 ${shift > 0 ? "text-bear" : shift < 0 ? "text-bull" : ""}`}>
+            {hasOverride ? `${shift >= 0 ? "+" : ""}$${fmt(shift)} / 张` : "—"}
+          </div>
+        </div>
       </div>
 
       <div className="h-80">
