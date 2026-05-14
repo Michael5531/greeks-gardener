@@ -159,7 +159,7 @@ const zh = {
   },
   protected: { loading: "加载中…" },
   common: { loading: "加载中…", run: "运行", reset: "重置默认", cancel: "取消", confirm: "确定", search: "搜索", noData: "暂无数据", select: "选择", from: "起始日", to: "结束日", date: "日期", today: "今日", price: "价格", change: "变动", help: "帮助", close: "关闭" },
-  market: { pre: "盘前", regular: "盘中", after: "盘后", closed: "休市", noTicker: "未选择标的", ytd: "YTD", since: "开盘以来", prevDay: "前一交易日", untilOpen: "距开盘", untilClose: "距收盘", untilPre: "距盘前", refresh: "刷新" },
+  market: { pre: "盘前", regular: "盘中", after: "盘后", closed: "休市", noTicker: "未选择标的", ytd: "YTD", since: "开盘以来", prevDay: "前一交易日", untilOpen: "距开盘", untilClose: "距收盘", untilPre: "距盘前", refresh: "刷新", ext: "夜盘价", extTip: "美股盘前/盘后报价" },
   nav: { dashboard: "概览", chain: "期权链", greeks: "3D Greeks", gex: "GEX 分析", orderbook: "实时盘口", flow: "历史期权流", backtest: "回测", signals: "信号", logout: "登出" },
   dashboard: { title: "概览", subtitle: "管理自选标的，快速跳转到期权链与 Greeks 分析。", placeholder: "搜索美股代码 (AAPL, TSLA, SPY…)", empty: "自选为空，搜索股票添加。", openChain: "期权链", open3D: "3D Greeks" },
   gex: { title: "GEX 分析", subtitle: "Gamma Exposure 按行权价分布 · 识别 Pin 点与 Zero Gamma Level", expirations: "到期日", add: "添加", spot: "Spot", totalGex: "Total Net GEX", zeroGamma: "Zero Gamma", contracts: "合约数", oi: "总 OI", byStrike: "按行权价", byExp: "按到期日", aiTitle: "AI GEX 解读 + 期权策略", aiSub: "基于当前 GEX 结构推荐所有主流期权组合", aiRun: "运行 AI 分析", aiLoading: "分析中" },
