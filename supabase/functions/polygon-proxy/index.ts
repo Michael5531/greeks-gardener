@@ -163,40 +163,79 @@ Deno.serve(async (req) => {
         break;
       }
       case "ticker-snapshot": {
-        // The /v2/snapshot/.../tickers/{T} endpoint requires the Stocks Snapshot
-        // entitlement which not all plans include. Compose an equivalent
-        // payload from /prev (prevDay close) + the most recent 1-min bar
-        // (used as the "last trade" price). Returns the same shape the
-        // frontend expects: { ticker: { lastTrade: {p}, day: {c}, prevDay: {c} } }.
-        const t = encodeURIComponent(body.ticker);
-        const today = new Date();
-        const from = new Date(today.getTime() - 5 * 24 * 3600 * 1000)
-          .toISOString().slice(0, 10);
-        const to = today.toISOString().slice(0, 10);
-        const key = `snap:${body.ticker}`;
+        // Use Yahoo Finance (free, no key, supports pre/post market) as the
+        // PRIMARY snapshot source — it is more reliable than Polygon's
+        // composite (which can miss extended-hours minute bars and rate-limits
+        // easily across the watchlist). Polygon /prev is used only as a
+        // fallback if Yahoo fails. Returns the shape the frontend expects.
+        const sym = String(body.ticker || "").toUpperCase();
+        const key = `snap2:${sym}`;
         const cachedR = await cachedFetchJson(key, ttl, async () => {
-          const [prevR, minR] = await Promise.all([
-            polygonFetchJson(`${POLYGON_BASE}/v2/aggs/ticker/${t}/prev?adjusted=true&apiKey=${apiKey}`),
-            polygonFetchJson(`${POLYGON_BASE}/v2/aggs/ticker/${t}/range/1/minute/${from}/${to}?adjusted=true&sort=desc&limit=1&apiKey=${apiKey}`),
-          ]);
-          const prevJ = prevR.data ?? {};
-          const minJ = minR.data ?? {};
-          return { data: { prevJ, minJ }, status: 200 };
+          // 1) Try Yahoo first.
+          let yMeta: any = null;
+          try {
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1m&range=1d&includePrePost=true`;
+            const yr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+            if (yr.ok) {
+              const yj = await yr.json();
+              yMeta = yj?.chart?.result?.[0]?.meta ?? null;
+            }
+          } catch (_) { /* ignore — fallback below */ }
+
+          // 2) If Yahoo failed, fall back to Polygon /prev (no extended-hours).
+          let pPrev: any = null;
+          if (!yMeta) {
+            try {
+              const pr = await polygonFetchJson(
+                `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${apiKey}`,
+              );
+              pPrev = pr.data?.results?.[0] ?? null;
+            } catch (_) { /* ignore */ }
+          }
+          return { data: { yMeta, pPrev }, status: 200 };
         });
-        const { prevJ, minJ } = cachedR.data;
-        const prevClose = prevJ?.results?.[0]?.c ?? null;
-        const lastBar = minJ?.results?.[0] ?? null;
-        const lastPrice = lastBar?.c ?? prevClose;
+
+        const { yMeta, pPrev } = cachedR.data;
+        if (yMeta) {
+          const reg = yMeta.regularMarketPrice ?? null;
+          const prev = yMeta.chartPreviousClose ?? yMeta.previousClose ?? null;
+          const pre = yMeta.preMarketPrice ?? null;
+          const post = yMeta.postMarketPrice ?? null;
+          const state = String(yMeta.marketState || "").toUpperCase();
+          // Pick the most relevant live price for the current session.
+          const live = state === "PRE" && pre != null ? pre
+            : (state === "POST" || state === "POSTPOST" || state === "CLOSED") && post != null ? post
+            : reg ?? post ?? pre ?? prev;
+          return json({
+            status: "OK",
+            ticker: {
+              ticker: sym,
+              lastTrade: live != null ? { p: live, t: Date.now() * 1e6 } : null,
+              day: { c: reg ?? live },
+              min: live != null ? { c: live, t: Date.now() * 1e6 } : null,
+              prevDay: { c: prev },
+              preMarket: pre != null ? { p: pre } : null,
+              postMarket: post != null ? { p: post } : null,
+              marketState: state,
+              todaysChange: live != null && prev != null ? live - prev : null,
+              todaysChangePerc: live != null && prev ? ((live - prev) / prev) * 100 : null,
+              updated: Date.now() * 1e6,
+            },
+          });
+        }
+
+        // Polygon fallback (no extended-hours).
+        const prevClose = pPrev?.c ?? null;
         return json({
           status: "OK",
           ticker: {
-            ticker: body.ticker,
-            lastTrade: lastPrice != null ? { p: lastPrice, t: lastBar?.t ?? Date.now() * 1e6 } : null,
-            day: { c: lastPrice, o: lastBar?.o, h: lastBar?.h, l: lastBar?.l, v: lastBar?.v },
-            min: lastBar ? { c: lastBar.c, o: lastBar.o, h: lastBar.h, l: lastBar.l, v: lastBar.v, t: lastBar.t } : null,
-            prevDay: { c: prevClose, o: prevJ?.results?.[0]?.o, h: prevJ?.results?.[0]?.h, l: prevJ?.results?.[0]?.l, v: prevJ?.results?.[0]?.v },
-            todaysChange: lastPrice != null && prevClose != null ? lastPrice - prevClose : null,
-            todaysChangePerc: lastPrice != null && prevClose ? ((lastPrice - prevClose) / prevClose) * 100 : null,
+            ticker: sym,
+            lastTrade: prevClose != null ? { p: prevClose, t: Date.now() * 1e6 } : null,
+            day: { c: prevClose },
+            min: null,
+            prevDay: { c: prevClose, o: pPrev?.o, h: pPrev?.h, l: pPrev?.l, v: pPrev?.v },
+            todaysChange: 0,
+            todaysChangePerc: 0,
             updated: Date.now() * 1e6,
           },
         });
