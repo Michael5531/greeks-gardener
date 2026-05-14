@@ -445,6 +445,33 @@ function ChartCard({ title, height, children }: { title: string; height: number;
   );
 }
 
+/** Custom candlestick shape used by recharts <Bar dataKey="range" />. */
+function Candle(props: any) {
+  const { x, y, width, height, payload } = props;
+  if (!payload || typeof payload.o !== "number") return null;
+  const { o, h, l, c } = payload;
+  if (h === l) {
+    const cx = x + width / 2;
+    return <line x1={cx - width * 0.35} x2={cx + width * 0.35} y1={y} y2={y}
+      stroke="hsl(var(--muted-foreground))" strokeWidth={1} />;
+  }
+  const isBull = c >= o;
+  const color = isBull ? "hsl(var(--bull))" : "hsl(var(--bear))";
+  const top = Math.max(o, c);
+  const bot = Math.min(o, c);
+  const bodyTop = y + ((h - top) / (h - l)) * height;
+  const bodyBot = y + ((h - bot) / (h - l)) * height;
+  const bodyH = Math.max(1, bodyBot - bodyTop);
+  const cx = x + width / 2;
+  const bodyW = Math.max(2, Math.min(10, width * 0.7));
+  return (
+    <g>
+      <line x1={cx} x2={cx} y1={y} y2={y + height} stroke={color} strokeWidth={1} />
+      <rect x={cx - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} />
+    </g>
+  );
+}
+
 function ExplainRow({ letter, desc }: { letter: string; desc: string }) {
   return (
     <div className="flex gap-3 rounded-md border border-border/60 bg-card/40 p-2">
