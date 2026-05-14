@@ -183,7 +183,7 @@ export default function Flow() {
           <h1 className="text-2xl font-semibold tracking-tight">历史期权流</h1>
           <p className="text-sm text-muted-foreground">扫描历史 trades & quotes，标记大单与 sweep 候选</p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+        <div className="w-72"><TickerSearch current={ticker} onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       <div className="rounded-lg border border-border bg-card/40 p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">

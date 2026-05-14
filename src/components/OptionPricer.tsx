@@ -74,7 +74,7 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
         <div className="flex items-center gap-3">
           {spot != null && <span className="font-mono text-xs text-muted-foreground">Spot ${spot.toFixed(2)}</span>}
           {showInternalSearch && (
-            <div className="w-64"><TickerSearch onSelect={t => setInternalTicker(t.ticker)} /></div>
+            <div className="w-64"><TickerSearch current={ticker} onSelect={t => setInternalTicker(t.ticker)} /></div>
           )}
         </div>
       </div>

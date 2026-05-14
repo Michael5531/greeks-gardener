@@ -135,7 +135,7 @@ export default function Orderbook() {
           <h1 className="text-2xl font-semibold tracking-tight">实时盘口</h1>
           <p className="text-sm text-muted-foreground">期权 Quotes & Trades 深度热力图 · 仅在交易时段实时更新</p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+        <div className="w-72"><TickerSearch current={ticker} onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       {ticker && (

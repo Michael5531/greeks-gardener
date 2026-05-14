@@ -82,7 +82,7 @@ export default function Greeks3D() {
           <h1 className="text-2xl font-semibold tracking-tight">波动率曲线 IV Smile</h1>
           <p className="text-sm text-muted-foreground">X = Strike · Y = 隐含波动率 · 每条曲线对应一个到期日</p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+        <div className="w-72"><TickerSearch current={ticker} onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       {ticker && expirations.length > 0 && (
