@@ -180,16 +180,33 @@ export default function OptionQuoteHistory({
       return {
         t: b.t, day,
         o: b.o, h: b.h, l: b.l, c: b.c, v: b.v,
-        bullBody: b.c >= b.o ? b.c - b.o : 0,
-        bearBody: b.c < b.o ? b.o - b.c : 0,
-        bodyBase: Math.min(b.o, b.c),
-        wickRange: [b.l, b.h] as [number, number],
+        range: [b.l, b.h] as [number, number],
         iv, spot: S ?? null,
       };
     });
   }, [optDaily, spotDaily, strike, expiration, type]);
 
-  const spotKline = useMemo(() => spotDaily.map(b => ({ t: b.t, c: b.c, h: b.h, l: b.l })), [spotDaily]);
+  const spotKline = useMemo(() => spotDaily.map(b => ({
+    t: b.t, o: b.o, h: b.h, l: b.l, c: b.c,
+    range: [b.l, b.h] as [number, number],
+  })), [spotDaily]);
+
+  const optYDomain = useMemo<[number, number] | undefined>(() => {
+    if (!optKline.length) return undefined;
+    let lo = Infinity, hi = -Infinity;
+    for (const d of optKline) { if (d.l < lo) lo = d.l; if (d.h > hi) hi = d.h; }
+    const pad = (hi - lo) * 0.08 || 1;
+    return [Math.max(0, lo - pad), hi + pad];
+  }, [optKline]);
+
+  const spotYDomain = useMemo<[number, number] | undefined>(() => {
+    if (!spotKline.length) return undefined;
+    let lo = Infinity, hi = -Infinity;
+    for (const d of spotKline) { if (d.l < lo) lo = d.l; if (d.h > hi) hi = d.h; }
+    if (strike != null) { if (strike < lo) lo = strike; if (strike > hi) hi = strike; }
+    const pad = (hi - lo) * 0.06 || 1;
+    return [Math.max(0, lo - pad), hi + pad];
+  }, [spotKline, strike]);
 
   const stats = useMemo(() => {
     const bids = chartData.map(d => d.bid).filter((v): v is number => v != null);
@@ -332,22 +349,21 @@ export default function OptionQuoteHistory({
                 <div className="grid h-full place-items-center text-xs text-muted-foreground">暂无历史数据</div>
               ) : (
                 <ChartSizer>{({ width, height }) => (
-                  <ComposedChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 0, bottom: 24 }}>
+                  <ComposedChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
                     <CartesianGrid strokeOpacity={0.1} />
-                    <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
+                    <XAxis dataKey="t" type="category"
                       tickFormatter={(t) => new Date(t).toISOString().slice(5, 10)}
                       tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      minTickGap={60} />
-                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))" />
+                      minTickGap={40} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
+                      domain={optYDomain ?? ["auto", "auto"]} width={50} tickFormatter={(v) => v.toFixed(2)} />
                     <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11 }}
                       labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
                       formatter={(v: any, name: string) => {
-                        if (name === "wickRange" && Array.isArray(v)) return [`${v[0].toFixed(2)} – ${v[1].toFixed(2)}`, "L–H"];
+                        if (name === "range" && Array.isArray(v)) return [`${v[0].toFixed(2)} – ${v[1].toFixed(2)}`, "L–H"];
                         return typeof v === "number" ? v.toFixed(3) : v;
                       }} />
-                    <Bar dataKey="wickRange" fill="hsl(var(--muted-foreground))" barSize={1} isAnimationActive={false} />
-                    <Bar dataKey="bullBody" stackId="body" fill="hsl(var(--bull))" barSize={6} isAnimationActive={false} />
-                    <Bar dataKey="bearBody" stackId="body" fill="hsl(var(--bear))" barSize={6} isAnimationActive={false} />
+                    <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
                   </ComposedChart>
                 )}</ChartSizer>
               )}
@@ -358,19 +374,24 @@ export default function OptionQuoteHistory({
                 <div className="grid h-full place-items-center text-xs text-muted-foreground">暂无数据</div>
               ) : (
                 <ChartSizer>{({ width, height }) => (
-                  <LineChart width={width} height={height} data={spotKline} margin={{ top: 8, right: 16, left: 0, bottom: 24 }}>
+                  <ComposedChart width={width} height={height} data={spotKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
                     <CartesianGrid strokeOpacity={0.1} />
-                    <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
+                    <XAxis dataKey="t" type="category"
                       tickFormatter={(t) => new Date(t).toISOString().slice(5, 10)}
                       tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      minTickGap={60} />
-                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))" domain={["auto", "auto"]} />
+                      minTickGap={40} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
+                      domain={spotYDomain ?? ["auto", "auto"]} width={50} tickFormatter={(v) => v.toFixed(0)} />
                     <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11 }}
                       labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
-                      formatter={(v: any) => (typeof v === "number" ? v.toFixed(2) : v)} />
-                    {strike != null && <ReferenceLine y={strike} stroke="hsl(var(--primary))" strokeDasharray="4 4" label={{ value: `K=${strike}`, fill: "hsl(var(--primary))", fontSize: 10 }} />}
-                    <Line type="monotone" dataKey="c" stroke="hsl(var(--primary))" dot={false} isAnimationActive={false} name="收盘" />
-                  </LineChart>
+                      formatter={(v: any, name: string) => {
+                        if (name === "range" && Array.isArray(v)) return [`${v[0].toFixed(2)} – ${v[1].toFixed(2)}`, "L–H"];
+                        return typeof v === "number" ? v.toFixed(2) : v;
+                      }} />
+                    {strike != null && <ReferenceLine y={strike} stroke="hsl(var(--primary))" strokeDasharray="4 4"
+                      label={{ value: `K=${strike}`, fill: "hsl(var(--primary))", fontSize: 10, position: "insideTopRight" }} />}
+                    <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                  </ComposedChart>
                 )}</ChartSizer>
               )}
             </ChartCard>
@@ -380,14 +401,14 @@ export default function OptionQuoteHistory({
                 <div className="grid h-full place-items-center text-xs text-muted-foreground">无 IV 数据</div>
               ) : (
                 <ChartSizer>{({ width, height }) => (
-                  <LineChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 0, bottom: 24 }}>
+                  <LineChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
                     <CartesianGrid strokeOpacity={0.1} />
-                    <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
+                    <XAxis dataKey="t" type="category"
                       tickFormatter={(t) => new Date(t).toISOString().slice(5, 10)}
                       tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      minTickGap={60} />
+                      minTickGap={40} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      tickFormatter={(v) => `${v.toFixed(0)}%`} />
+                      tickFormatter={(v) => `${v.toFixed(0)}%`} width={50} />
                     <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11 }}
                       labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
                       formatter={(v: any) => v == null ? "—" : `${(v as number).toFixed(2)}%`} />
