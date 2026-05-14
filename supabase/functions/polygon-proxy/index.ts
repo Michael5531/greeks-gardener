@@ -5,6 +5,9 @@ const corsHeaders = {
 };
 
 const POLYGON_BASE = "https://api.polygon.io";
+let polygonChain: Promise<any> = Promise.resolve();
+let polygonLastAt = 0;
+const POLYGON_MIN_INTERVAL_MS = 350;
 
 // ── In-memory cache + in-flight dedupe to absorb bursts and stay under the
 // upstream rate limit. Keyed by the full upstream URL (incl. apiKey).
@@ -18,6 +21,8 @@ const TTL_MS: Record<string, number> = {
   "market-status": 30_000,
   "option-quotes": 10_000,
   "option-trades": 10_000,
+  "option-intraday-pair": 30_000,
+  "option-history-pair": 5 * 60_000,
   "option-snapshot-single": 15_000,
   "search-tickers": 60_000,
 };
@@ -37,6 +42,50 @@ async function cachedFetchJson(key: string, ttl: number, run: () => Promise<{ da
   })();
   inflight.set(key, p);
   return p;
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function polygonFetchJson(target: string, tries = 6): Promise<{ data: any; status: number }> {
+  const run = async () => {
+    let last: any = null;
+    const since = Date.now() - polygonLastAt;
+    if (since < POLYGON_MIN_INTERVAL_MS) await wait(POLYGON_MIN_INTERVAL_MS - since);
+
+    for (let i = 0; i < tries; i++) {
+      try {
+        const rr = await fetch(target);
+        polygonLastAt = Date.now();
+        const dd = await rr.json().catch(() => ({}));
+        const softRateLimit = dd?.status === "ERROR" && `${dd?.error ?? dd?.message ?? ""}`.toLowerCase().includes("maximum requests per minute");
+        if (rr.status === 429 || softRateLimit || (rr.status >= 500 && rr.status < 600)) {
+          last = dd;
+          const waitMs = Math.min(18_000, 1_200 * Math.pow(2, i)) + Math.floor(Math.random() * 350);
+          console.warn(`[polygon-proxy] retry ${i + 1}/${tries} status=${rr.status} wait=${waitMs}ms`);
+          await wait(waitMs);
+          continue;
+        }
+        return { data: dd, status: rr.status };
+      } catch (e) {
+        last = e;
+        await wait(Math.min(8_000, 800 * (i + 1)));
+      }
+    }
+    throw new Error(last?.error ?? last?.message ?? "Polygon request failed after retries");
+  };
+  const p = polygonChain.then(run, run);
+  polygonChain = p.catch(() => {});
+  return p;
+}
+
+async function safeCachedPolygon(key: string, ttl: number, target: string) {
+  try {
+    return await cachedFetchJson(key, ttl, () => polygonFetchJson(target));
+  } catch (e) {
+    return { data: { results: [], error: e instanceof Error ? e.message : String(e) }, status: 503 };
+  }
 }
 
 Deno.serve(async (req) => {
