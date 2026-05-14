@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import ChartSizer from "@/components/charts/ChartSizer";
 import { getStrategy } from "@/lib/strategies";
@@ -9,31 +9,59 @@ import { fmt, fmtPct } from "@/lib/optionUtils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Button } from "@/components/ui/button";
 
 export default function StrategyCard({
-  strategyId, ticker, dte, iv,
-}: { strategyId: string; ticker: string; dte: number; iv: number }) {
+  strategyId, ticker, dte, iv, onBacktest,
+}: { strategyId: string; ticker: string; dte: number; iv: number; onBacktest?: () => void }) {
   const def = getStrategy(strategyId);
   const { quote } = useLiveQuote(ticker || null, 8000);
   const spot = quote?.price ?? 100;
 
-  const { data: po } = useComputePayoff(strategyId, spot, iv, dte);
+  // 冻结网格使用的 spot：仅当价格相对上次冻结值偏移 >1.5% 时才重算 payoff，
+  // 这样实时报价（每 8~15s 跳动）只更新参考线，不会触发整张图重渲染。
+  const frozenSpotRef = useRef<number>(spot);
+  const gridSpot = useMemo(() => {
+    const f = frozenSpotRef.current;
+    if (!f || Math.abs(spot - f) / f > 0.015) frozenSpotRef.current = spot;
+    return frozenSpotRef.current;
+  }, [spot]);
+
+  const { data: po } = useComputePayoff(strategyId, gridSpot, iv, dte);
   const legs = po?.legs ?? [];
   const baseGrid = po?.grid ?? [];
   const baseBreakevens = po?.breakevens ?? [];
   const baseNetDebit = po?.netDebit ?? 0;
 
   // 买入合约 (实际成交) — 用于覆写理论 BS 入场价，重算 PnL。
-  // entryDate 仅作信息展示 (DTE 已在策略参数中)。
   const [entryDate, setEntryDate] = useState<string>("");
-  const [entryPremium, setEntryPremium] = useState<string>(""); // 每股 (×100 = 每张)
+  const [entryPremium, setEntryPremium] = useState<string>(""); // 每股
+  const [marketPremium, setMarketPremium] = useState<string>(""); // 当前市场每股价
 
   // Δ = 实际净 debit - 理论净 debit (按每股, 同 baseNetDebit 口径)
   const hasOverride = entryPremium !== "" && Number.isFinite(+entryPremium);
   const actualNetDebit = hasOverride ? +entryPremium : baseNetDebit;
   const shift = (actualNetDebit - baseNetDebit) * 100; // 多头入场价升高 ⇒ PnL 下移
-  const grid = hasOverride
-    ? baseGrid.map(g => ({ price: g.price, expiry: +(g.expiry - shift).toFixed(2), today: +(g.today - shift).toFixed(2) }))
+
+  // today 曲线再叠加一个市场价偏移：理论 BS 在当前 spot 的 today 值 vs 实际市场价的差。
+  // 这样用户填入"当前期权市价"后，曲线在 spot 处会等于真实未实现 PnL。
+  const hasMarket = marketPremium !== "" && Number.isFinite(+marketPremium);
+  const theoryTodayAtSpot = (() => {
+    if (!baseGrid.length) return 0;
+    let nearest = baseGrid[0];
+    for (const g of baseGrid) if (Math.abs(g.price - spot) < Math.abs(nearest.price - spot)) nearest = g;
+    return nearest.today;
+  })();
+  // 理论 today 在 spot 处对应的"每股期权值" ≈ baseNetDebit + theoryTodayAtSpot/100
+  const theoryMarkAtSpot = baseNetDebit + theoryTodayAtSpot / 100;
+  const todayMarketShift = hasMarket ? (+marketPremium - theoryMarkAtSpot) * 100 : 0;
+
+  const grid = (hasOverride || hasMarket)
+    ? baseGrid.map(g => ({
+        price: g.price,
+        expiry: +(g.expiry - shift).toFixed(2),
+        today: +(g.today - shift + todayMarketShift).toFixed(2),
+      }))
     : baseGrid;
   const breakevens = hasOverride
     ? (() => {
@@ -51,6 +79,13 @@ export default function StrategyCard({
   const maxProfit = grid.length ? Math.max(...grid.map(g => g.expiry)) : 0;
   const maxLoss = grid.length ? Math.min(...grid.map(g => g.expiry)) : 0;
   const netDebit = actualNetDebit;
+
+  // 当前未实现 PnL（每张） = (现价 - 入场价) * 100
+  const unrealizedPerContract = hasMarket && hasOverride
+    ? (+marketPremium - +entryPremium) * 100
+    : hasMarket
+      ? (+marketPremium - baseNetDebit) * 100
+      : null;
 
   const [hist, setHist] = useState<{ winRate: number | null; avgRet: number | null; n: number }>({ winRate: null, avgRet: null, n: 0 });
   useEffect(() => {
@@ -109,7 +144,7 @@ export default function StrategyCard({
       {/* 实际买入合约 — 覆写理论 BS 入场价，重算到期/今日 PnL 曲线 */}
       <div className="rounded-md border border-border/60 bg-background/30 p-3 grid md:grid-cols-4 gap-3 items-end">
         <div className="md:col-span-4 text-[11px] text-muted-foreground -mb-1">
-          实际买入合约（可选）：填入后将以实际成交价重算 PnL，理论 BS 价仅作参考。
+          实际买入合约（可选）：填入"买入价"后用实际成交价重算到期 PnL；填入"当前市价"后今日 PnL 曲线在 spot 处对齐真实未实现盈亏。
         </div>
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground">买入日期</Label>
@@ -117,22 +152,35 @@ export default function StrategyCard({
         </div>
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground">
-            买入合约价 / 股 · 留空=理论 ${fmt(baseNetDebit)}
+            买入价 / 股 · 留空=理论 ${fmt(baseNetDebit)}
           </Label>
           <Input className="font-mono" placeholder={`${fmt(baseNetDebit)}`} value={entryPremium}
             onChange={e => setEntryPremium(e.target.value)} />
         </div>
         <div className="space-y-1">
-          <Label className="text-[11px] text-muted-foreground">每张成本 (×100)</Label>
-          <div className="font-mono text-sm h-9 flex items-center px-2 rounded-md border border-border/40 bg-background/40">
-            ${fmt(Math.abs(actualNetDebit) * 100)}
-          </div>
+          <Label className="text-[11px] text-muted-foreground">
+            当前市价 / 股 · 留空=理论 ${fmt(theoryMarkAtSpot)}
+          </Label>
+          <Input className="font-mono" placeholder={`${fmt(theoryMarkAtSpot)}`} value={marketPremium}
+            onChange={e => setMarketPremium(e.target.value)} />
         </div>
         <div className="space-y-1">
-          <Label className="text-[11px] text-muted-foreground">相对理论 Δ</Label>
-          <div className={`font-mono text-sm h-9 flex items-center px-2 rounded-md border border-border/40 bg-background/40 ${shift > 0 ? "text-bear" : shift < 0 ? "text-bull" : ""}`}>
-            {hasOverride ? `${shift >= 0 ? "+" : ""}$${fmt(shift)} / 张` : "—"}
+          <Label className="text-[11px] text-muted-foreground">未实现 PnL / 张</Label>
+          <div className={`font-mono text-sm h-9 flex items-center px-2 rounded-md border border-border/40 bg-background/40 ${
+            unrealizedPerContract == null ? "" : unrealizedPerContract > 0 ? "text-bull" : unrealizedPerContract < 0 ? "text-bear" : ""
+          }`}>
+            {unrealizedPerContract == null ? "—" : `${unrealizedPerContract >= 0 ? "+" : ""}$${fmt(unrealizedPerContract)}`}
           </div>
+        </div>
+        <div className="md:col-span-4 flex items-center justify-between gap-2 pt-1">
+          <div className="text-[10px] text-muted-foreground font-mono">
+            每张成本 ${fmt(Math.abs(actualNetDebit) * 100)} · 理论 BS Δ {hasOverride ? `${shift >= 0 ? "+" : ""}$${fmt(shift)}/张` : "—"}
+          </div>
+          {onBacktest && (
+            <Button size="sm" variant="outline" onClick={onBacktest} className="text-xs">
+              用以上参数回测 →
+            </Button>
+          )}
         </div>
       </div>
 
