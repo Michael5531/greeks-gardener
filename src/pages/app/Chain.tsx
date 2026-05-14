@@ -14,7 +14,7 @@ export default function Chain() {
   const [histOpen, setHistOpen] = useState(false);
   const [histContract, setHistContract] = useState<{
     ticker: string; label: string;
-    underlying: string; strike: number; expiration: string; type: "call" | "put";
+    underlying: string; strike: number; expiration: string; type: "call" | "put"; initialIv?: number;
   } | null>(null);
   const openHistory = (r: any) => {
     const cp = r.details?.contract_type === "call" ? "C" : "P";
@@ -25,6 +25,7 @@ export default function Chain() {
       strike: Number(r.details.strike_price),
       expiration: r.details.expiration_date,
       type: r.details.contract_type,
+      initialIv: r.implied_volatility,
     });
     setHistOpen(true);
   };
@@ -113,6 +114,7 @@ export default function Chain() {
         strike={histContract?.strike}
         expiration={histContract?.expiration}
         type={histContract?.type}
+        initialIv={histContract?.initialIv}
       />
     </div>
   );
