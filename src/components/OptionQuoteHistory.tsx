@@ -433,7 +433,7 @@ export default function OptionQuoteHistory({
                   <div className="mb-1 px-1 text-[10px] text-muted-foreground font-mono">
                     {displayOptKline.length} 日 · {displayHistorySource === "bs_model" ? `BS 理论日K（IV=${((modelIv ?? 0) * 100).toFixed(1)}%）` : displayHistorySource === "quotes_mid_daily" ? "Bid/Ask mid 重建日K" : "Polygon 聚合日K"}
                   </div>
-                  <ChartSizer>{({ width, height }) => (
+                  <ChartSizer className="h-[calc(100%-18px)] w-full min-h-0 min-w-0">{({ width, height }) => (
                     <ComposedChart width={width} height={height} data={displayOptKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
                       <CartesianGrid strokeOpacity={0.1} />
                       <XAxis dataKey="t" type="category"
