@@ -73,21 +73,27 @@ export default function OptionQuoteHistory({
   }
 
   async function loadHistory() {
-    if (!optionTicker || !underlying) return;
+    if (!optionTicker || !underlying) {
+      console.warn("[OptionQuoteHistory] loadHistory skipped", { optionTicker, underlying });
+      return;
+    }
     try {
       const today = todayISO();
       const from = (() => {
         const d = new Date(); d.setFullYear(d.getFullYear() - 1);
         return d.toISOString().slice(0, 10);
       })();
-      const [opt, sp] = await Promise.all([
-        callPolygon<{ results?: any[] }>("option-aggregates", { option_ticker: optionTicker, from, to: today })
-          .then(r => r.results ?? []),
-        callPolygon<{ results?: any[] }>("stock-aggregates", { ticker: underlying, from, to: today })
-          .then(r => r.results ?? []),
-      ]);
-      setOptDaily(opt); setSpotDaily(sp);
-    } catch { /* keep silent on history secondary failure */ }
+      // Fire independently so a failure on one side does not nuke the other.
+      const optP = callPolygon<{ results?: any[] }>("option-aggregates", { option_ticker: optionTicker, from, to: today })
+        .then(r => { setOptDaily(r.results ?? []); })
+        .catch(e => { console.warn("[OptionQuoteHistory] option-aggregates failed", e); setOptDaily([]); });
+      const spP = callPolygon<{ results?: any[] }>("stock-aggregates", { ticker: underlying, from, to: today })
+        .then(r => { setSpotDaily(r.results ?? []); })
+        .catch(e => { console.warn("[OptionQuoteHistory] stock-aggregates failed", e); setSpotDaily([]); });
+      await Promise.allSettled([optP, spP]);
+    } catch (e) {
+      console.warn("[OptionQuoteHistory] loadHistory error", e);
+    }
   }
 
   useEffect(() => {
