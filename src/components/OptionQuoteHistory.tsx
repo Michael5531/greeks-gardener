@@ -399,24 +399,29 @@ export default function OptionQuoteHistory({
                   暂无历史 K 线；部分新上市或远月合约本身可能只有很短交易历史
                 </div>
               ) : (
-                <ChartSizer>{({ width, height }) => (
-                  <ComposedChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
-                    <CartesianGrid strokeOpacity={0.1} />
-                    <XAxis dataKey="t" type="category"
-                      tickFormatter={(t) => new Date(t).toISOString().slice(5, 10)}
-                      tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      minTickGap={40} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
-                      domain={optYDomain ?? ["auto", "auto"]} width={50} tickFormatter={(v) => v.toFixed(2)} />
-                    <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11 }}
-                      labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
-                      formatter={(v: any, name: string) => {
-                        if (name === "range" && Array.isArray(v)) return [`${v[0].toFixed(2)} – ${v[1].toFixed(2)}`, "L–H"];
-                        return typeof v === "number" ? v.toFixed(3) : v;
-                      }} />
-                    <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
-                  </ComposedChart>
-                )}</ChartSizer>
+                <>
+                  <div className="mb-1 px-1 text-[10px] text-muted-foreground font-mono">
+                    {optKline.length} 日 · {historySource === "quotes_mid_daily" ? "Bid/Ask mid 重建日K" : "Polygon 聚合日K"}
+                  </div>
+                  <ChartSizer>{({ width, height }) => (
+                    <ComposedChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
+                      <CartesianGrid strokeOpacity={0.1} />
+                      <XAxis dataKey="t" type="category"
+                        tickFormatter={(t) => new Date(t).toISOString().slice(5, 10)}
+                        tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
+                        minTickGap={40} interval="preserveStartEnd" />
+                      <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} stroke="hsl(var(--muted-foreground))"
+                        domain={optYDomain ?? ["auto", "auto"]} width={50} tickFormatter={(v) => v.toFixed(2)} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 11 }}
+                        labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
+                        formatter={(v: any, name: string) => {
+                          if (name === "range" && Array.isArray(v)) return [`${v[0].toFixed(2)} – ${v[1].toFixed(2)}`, "L–H"];
+                          return typeof v === "number" ? v.toFixed(3) : v;
+                        }} />
+                      <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                    </ComposedChart>
+                  )}</ChartSizer>
+                </>
               )}
             </ChartCard>
 
