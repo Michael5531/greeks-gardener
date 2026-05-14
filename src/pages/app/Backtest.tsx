@@ -15,6 +15,8 @@ import StrategyCard from "@/components/StrategyCard";
 import { getOptionsChain, getSnapshot } from "@/lib/polygon";
 import { useComputeGEX } from "@/hooks/useComputeGEX";
 import OptionPricer from "@/components/OptionPricer";
+import SingleTradeSim from "@/components/SingleTradeSim";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Backtest() {
   const [selTicker, setSelTicker] = useSelectedTicker();
@@ -103,9 +105,22 @@ export default function Backtest() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">策略回测</h1>
-        <p className="text-sm text-muted-foreground">使用 Polygon 历史数据 + 内置 Black–Scholes 估值器执行策略模拟</p>
+        <p className="text-sm text-muted-foreground">
+          使用 Polygon 原始（未复权）日 K + Black–Scholes 估值器。两种模式：策略循环回测，或针对一笔合约的 What-if 推演。
+        </p>
       </div>
 
+      <Tabs defaultValue="loop" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="loop">策略循环回测</TabsTrigger>
+          <TabsTrigger value="single">单笔合约推演</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="single" className="space-y-4">
+          <SingleTradeSim ticker={ticker} />
+        </TabsContent>
+
+        <TabsContent value="loop" className="space-y-6">
       <div className="rounded-lg border border-border bg-card/40 p-4 grid md:grid-cols-7 gap-3">
         <Field label={`标的${spot != null ? ` · $${spot.toFixed(2)}` : ""}`}>
           <Input className="font-mono" value={ticker} onChange={e => { const t = e.target.value.toUpperCase(); setTicker(t); setSelTicker(t); }} />
@@ -187,6 +202,8 @@ export default function Backtest() {
           </table>
         </div>
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
