@@ -16,34 +16,50 @@ const NY_FMT = new Intl.DateTimeFormat("en-CA", {
 function nyDate(ts: number): string { return NY_FMT.format(new Date(ts)); } // YYYY-MM-DD
 function parseDateUTC(d: string): number { return Date.parse(d + "T00:00:00Z"); }
 
+// Global throttle: serialize Polygon calls and enforce a min interval between
+// requests to stay under the free-tier 5 req/min cap.
+let polyChain: Promise<any> = Promise.resolve();
+let polyLastAt = 0;
+const POLY_MIN_INTERVAL_MS = 350;
+
 // Polygon fetch with retry/backoff on 429 (rate limit) and transient 5xx.
-async function polyFetch(url: string, tries = 4): Promise<any> {
-  let lastErr: any = null;
-  for (let i = 0; i < tries; i++) {
-    try {
-      const r = await fetch(url);
-      if (r.status === 429 || (r.status >= 500 && r.status < 600)) {
-        const wait = 1200 * Math.pow(2, i); // 1.2s, 2.4s, 4.8s, 9.6s
-        console.warn(`[polygon] ${r.status} — retry in ${wait}ms`);
-        await new Promise(res => setTimeout(res, wait));
-        continue;
-      }
-      const j = await r.json();
-      // Polygon sometimes returns 200 with status:"ERROR" + rate-limit message
-      if (j?.status === "ERROR" && typeof j?.error === "string" && j.error.toLowerCase().includes("maximum requests per minute")) {
-        const wait = 1500 * Math.pow(2, i);
-        console.warn(`[polygon] soft 429 — retry in ${wait}ms`);
-        await new Promise(res => setTimeout(res, wait));
-        lastErr = j;
-        continue;
-      }
-      return j;
-    } catch (e) {
-      lastErr = e;
-      await new Promise(res => setTimeout(res, 800 * (i + 1)));
+async function polyFetch(url: string, tries = 7): Promise<any> {
+  const run = async () => {
+    const since = Date.now() - polyLastAt;
+    if (since < POLY_MIN_INTERVAL_MS) {
+      await new Promise(res => setTimeout(res, POLY_MIN_INTERVAL_MS - since));
     }
-  }
-  throw new Error(typeof lastErr === "string" ? lastErr : (lastErr?.error || lastErr?.message || "polygon fetch failed after retries"));
+    let lastErr: any = null;
+    for (let i = 0; i < tries; i++) {
+      try {
+        const r = await fetch(url);
+        polyLastAt = Date.now();
+        if (r.status === 429 || (r.status >= 500 && r.status < 600)) {
+          const wait = Math.min(15000, 1500 * Math.pow(2, i)) + Math.floor(Math.random() * 400);
+          console.warn(`[polygon] ${r.status} — retry in ${wait}ms`);
+          await new Promise(res => setTimeout(res, wait));
+          continue;
+        }
+        const j = await r.json();
+        if (j?.status === "ERROR" && typeof j?.error === "string" && j.error.toLowerCase().includes("maximum requests per minute")) {
+          const wait = Math.min(20000, 2000 * Math.pow(2, i)) + Math.floor(Math.random() * 400);
+          console.warn(`[polygon] soft 429 — retry in ${wait}ms`);
+          await new Promise(res => setTimeout(res, wait));
+          lastErr = j;
+          continue;
+        }
+        return j;
+      } catch (e) {
+        lastErr = e;
+        await new Promise(res => setTimeout(res, 1000 * (i + 1)));
+      }
+    }
+    throw new Error(typeof lastErr === "string" ? lastErr : (lastErr?.error || lastErr?.message || "polygon fetch failed after retries"));
+  };
+  // Chain so concurrent callers within this isolate don't burst together.
+  const p = polyChain.then(run, run);
+  polyChain = p.catch(() => {});
+  return p;
 }
 
 function erf(x: number) {
