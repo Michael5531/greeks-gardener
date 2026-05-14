@@ -88,6 +88,46 @@ async function safeCachedPolygon(key: string, ttl: number, target: string) {
   }
 }
 
+function isoToNs(iso: string, endOfDay = false) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const ms = Date.UTC(y, (m ?? 1) - 1, d ?? 1, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  return String(ms * 1_000_000);
+}
+
+function withApiKey(url: string, apiKey: string) {
+  const u = new URL(url);
+  u.searchParams.set("apiKey", apiKey);
+  return u.toString();
+}
+
+async function optionQuoteDailyBars(optionTicker: string, from: string, to: string, apiKey: string, ttl: number, maxPages = 24) {
+  const byDay = new Map<string, any>();
+  let next = `${POLYGON_BASE}/v3/quotes/${encodeURIComponent(optionTicker)}?timestamp.gte=${isoToNs(from)}&timestamp.lte=${isoToNs(to, true)}&order=asc&limit=50000&sort=timestamp`;
+  let pages = 0;
+  while (next && pages < maxPages) {
+    const keyed = next.replace(/([?&])apiKey=[^&]+&?/, "$1");
+    const { data, status } = await safeCachedPolygon(`hist-quotes:${keyed}`, ttl, withApiKey(next, apiKey));
+    if (status >= 400) break;
+    for (const q of data?.results ?? []) {
+      const ts = q.sip_timestamp ?? q.participant_timestamp ?? q.trf_timestamp;
+      const bid = q.bid_price ?? q.bid;
+      const ask = q.ask_price ?? q.ask;
+      const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : bid > 0 ? bid : ask > 0 ? ask : null;
+      if (!(ts > 0) || !(mid > 0)) continue;
+      const day = new Date(ts / 1_000_000).toISOString().slice(0, 10);
+      const bar = byDay.get(day) ?? { t: Date.parse(`${day}T16:00:00Z`), o: mid, h: mid, l: mid, c: mid, v: 0, quote_count: 0, source: "quote_mid" };
+      bar.h = Math.max(bar.h, mid);
+      bar.l = Math.min(bar.l, mid);
+      bar.c = mid;
+      bar.quote_count += 1;
+      byDay.set(day, bar);
+    }
+    pages++;
+    next = data?.next_url ? data.next_url : "";
+  }
+  return { bars: Array.from(byDay.values()).sort((a, b) => a.t - b.t), pages };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
