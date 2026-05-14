@@ -223,6 +223,23 @@ Deno.serve(async (req) => {
         params.set("limit", "5000");
         break;
       }
+      case "option-history-pair": {
+        const { option_ticker, underlying, from, to } = body;
+        if (!option_ticker || !underlying || !from || !to) return json({ error: "missing option_ticker, underlying, from or to" }, 400);
+        const optionTarget = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(option_ticker)}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
+        const stockTarget = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(underlying)}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
+        const [optionR, stockR] = await Promise.all([
+          safeCachedPolygon(`hist-opt:${option_ticker}|${from}|${to}`, ttl, optionTarget),
+          safeCachedPolygon(`hist-stock:${underlying}|${from}|${to}`, ttl, stockTarget),
+        ]);
+        return json({
+          status: "OK",
+          option: optionR.data?.results ?? [],
+          underlying: stockR.data?.results ?? [],
+          fallback: optionR.status >= 400 || stockR.status >= 400,
+          messages: [optionR.data?.message ?? optionR.data?.error, stockR.data?.message ?? stockR.data?.error].filter(Boolean),
+        });
+      }
       case "market-status": {
         endpoint = "/v1/marketstatus/now";
         break;
@@ -246,6 +263,23 @@ Deno.serve(async (req) => {
         params.set("sort", "timestamp");
         break;
       }
+      case "option-intraday-pair": {
+        const { option_ticker, underlying, date, gte, lte, limit = 50000 } = body;
+        if (!option_ticker || !underlying || !date || !gte || !lte) return json({ error: "missing option_ticker, underlying, date, gte or lte" }, 400);
+        const quoteTarget = `${POLYGON_BASE}/v3/quotes/${encodeURIComponent(option_ticker)}?timestamp.gte=${gte}&timestamp.lte=${lte}&order=asc&limit=${limit}&sort=timestamp&apiKey=${apiKey}`;
+        const minuteTarget = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(underlying)}/range/1/minute/${date}/${date}?adjusted=true&sort=asc&limit=50000&apiKey=${apiKey}`;
+        const [quoteR, minuteR] = await Promise.all([
+          safeCachedPolygon(`quotes:${option_ticker}|${gte}|${lte}|${limit}`, ttl, quoteTarget),
+          safeCachedPolygon(`minute:${underlying}|${date}`, ttl, minuteTarget),
+        ]);
+        return json({
+          status: "OK",
+          quotes: quoteR.data?.results ?? [],
+          underlying_minutes: minuteR.data?.results ?? [],
+          fallback: quoteR.status >= 400 || minuteR.status >= 400,
+          messages: [quoteR.data?.message ?? quoteR.data?.error, minuteR.data?.message ?? minuteR.data?.error].filter(Boolean),
+        });
+      }
       case "option-snapshot-single": {
         const { underlying, option_ticker } = body;
         endpoint = `/v3/snapshot/options/${encodeURIComponent(underlying)}/${encodeURIComponent(option_ticker)}`;
@@ -257,11 +291,7 @@ Deno.serve(async (req) => {
 
     params.set("apiKey", apiKey);
     const target = `${POLYGON_BASE}${endpoint}?${params.toString()}`;
-    const r = await cachedFetchJson(target, ttl, async () => {
-      const rr = await fetch(target);
-      const dd = await rr.json();
-      return { data: dd, status: rr.status };
-    });
+    const r = await cachedFetchJson(target, ttl, () => polygonFetchJson(target));
     if (r.status >= 400) return json(fallbackPayload(action, r.data, r.status), 200);
     return json(r.data, r.status);
   } catch (e) {
