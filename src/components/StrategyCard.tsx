@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useOptionsChain } from "@/hooks/useOptionsChain";
+import { dteFor } from "@/components/OptionLegsBuilder";
 
 export default function StrategyCard({
   strategyId, ticker, dte, iv, onBacktest,
@@ -17,6 +20,8 @@ export default function StrategyCard({
   const def = getStrategy(strategyId);
   const { quote } = useLiveQuote(ticker || null, 8000);
   const spot = quote?.price ?? 100;
+  const firstLeg = useMemo(() => (def.legs(spot)?.[0]) ?? { type: "call" as const, side: "long" as const, strikeOffset: 0 }, [def, spot]);
+  const { data: chain, expirations } = useOptionsChain(ticker || null);
 
   // 冻结网格使用的 spot：仅当价格相对上次冻结值偏移 >1.5% 时才重算 payoff，
   // 这样实时报价（每 8~15s 跳动）只更新参考线，不会触发整张图重渲染。
@@ -37,6 +42,41 @@ export default function StrategyCard({
   const [entryDate, setEntryDate] = useState<string>("");
   const [entryPremium, setEntryPremium] = useState<string>(""); // 每股
   const [marketPremium, setMarketPremium] = useState<string>(""); // 当前市场每股价
+
+  // 已购买合约的选择（从期权链中）
+  const [pickedExp, setPickedExp] = useState<string>("");
+  const [pickedStrike, setPickedStrike] = useState<string>("");
+
+  const strikesByExp = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const c of chain) {
+      const e = c.details?.expiration_date, k = c.details?.strike_price, t = c.details?.contract_type;
+      if (!e || k == null || t !== firstLeg.type) continue;
+      if (!m.has(e)) m.set(e, []);
+      const arr = m.get(e)!;
+      if (!arr.includes(k)) arr.push(k);
+    }
+    for (const a of m.values()) a.sort((x, y) => x - y);
+    return m;
+  }, [chain, firstLeg.type]);
+
+  const pickedContract = useMemo(() => {
+    if (!pickedExp || !pickedStrike) return null;
+    return chain.find(c =>
+      c.details?.expiration_date === pickedExp &&
+      c.details?.strike_price === +pickedStrike &&
+      c.details?.contract_type === firstLeg.type
+    ) ?? null;
+  }, [chain, pickedExp, pickedStrike, firstLeg.type]);
+
+  // 选中合约后，自动把 mid 填入"当前市价"（仅当用户尚未手动填写）
+  useEffect(() => {
+    if (!pickedContract?.last_quote) return;
+    const mid = (pickedContract.last_quote.bid + pickedContract.last_quote.ask) / 2;
+    if (Number.isFinite(mid) && mid > 0 && marketPremium === "") {
+      setMarketPremium(mid.toFixed(2));
+    }
+  }, [pickedContract]); // eslint-disable-line
 
   // Δ = 实际净 debit - 理论净 debit (按每股, 同 baseNetDebit 口径)
   const hasOverride = entryPremium !== "" && Number.isFinite(+entryPremium);
@@ -145,6 +185,44 @@ export default function StrategyCard({
       <div className="rounded-md border border-border/60 bg-background/30 p-3 grid md:grid-cols-4 gap-3 items-end">
         <div className="md:col-span-4 text-[11px] text-muted-foreground -mb-1">
           实际买入合约（可选）：填入"买入价"后用实际成交价重算到期 PnL；填入"当前市价"后今日 PnL 曲线在 spot 处对齐真实未实现盈亏。
+        </div>
+        <div className="md:col-span-4 grid md:grid-cols-3 gap-3 items-end pt-1 pb-1 border-b border-border/40">
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">已购买合约 · 到期日</Label>
+            <Select value={pickedExp} onValueChange={(v) => { setPickedExp(v); setPickedStrike(""); }}>
+              <SelectTrigger className="h-9 text-xs font-mono"><SelectValue placeholder={expirations.length ? "选择到期" : "加载中…"} /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                {expirations.map(e => (
+                  <SelectItem key={e} value={e} className="text-xs font-mono">{e} ({dteFor(e)}d)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Strike · {firstLeg.type.toUpperCase()}</Label>
+            <Select value={pickedStrike} onValueChange={setPickedStrike} disabled={!pickedExp}>
+              <SelectTrigger className="h-9 text-xs font-mono"><SelectValue placeholder={pickedExp ? "选择 strike" : "先选到期"} /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                {(strikesByExp.get(pickedExp) ?? []).map(k => (
+                  <SelectItem key={k} value={String(k)} className="text-xs font-mono">{k}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">合约信息</Label>
+            <div className="h-9 flex items-center px-2 rounded-md border border-border/40 bg-background/40 text-[11px] font-mono text-muted-foreground">
+              {pickedContract ? (
+                <>
+                  Mid ${pickedContract.last_quote ? ((pickedContract.last_quote.bid + pickedContract.last_quote.ask) / 2).toFixed(2) : "—"}
+                  <span className="mx-2">·</span>
+                  IV {pickedContract.implied_volatility != null ? `${(pickedContract.implied_volatility * 100).toFixed(1)}%` : "—"}
+                  <span className="mx-2">·</span>
+                  OI {pickedContract.open_interest?.toLocaleString?.() ?? "—"}
+                </>
+              ) : "—"}
+            </div>
+          </div>
         </div>
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground">买入日期</Label>
