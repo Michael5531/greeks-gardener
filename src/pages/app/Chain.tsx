@@ -77,7 +77,7 @@ export default function Chain() {
             {spot != null && <span className="ml-2 font-mono text-primary">${fmt(spot)}</span>}
           </p>
         </div>
-        <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+        <div className="w-72"><TickerSearch current={ticker} onSelect={t => setTicker(t.ticker)} /></div>
       </div>
 
       {ticker && (

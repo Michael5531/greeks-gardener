@@ -31,7 +31,7 @@ const zh = {
     footerNote: "仅信号研究平台 · 不构成投资建议",
   },
   auth: { signIn: "登录", signUp: "注册", create: "创建账号", or: "或", google: "使用 Google 登录", email: "邮箱", password: "密码", pwHint: "至少 6 位", signupOk: "注册成功，请检查邮箱验证后登录。" },
-  ticker: { placeholder: "搜索美股代码后按 Enter 或点击 ✓ 确认", pending: "待确认", confirmTitle: "确认 underlying", watchlist: "自选" },
+  ticker: { placeholder: "搜索美股代码后按 Enter 或点击 ✓ 确认", pending: "待确认", confirmTitle: "确认 underlying", watchlist: "自选", current: "当前", switchedTo: "已切换到", searchAnother: "搜索切换其他标的…", clear: "清除" },
   pricerExt: {
     title: "期权价值计算器 · 多腿",
     sub: "从期权链选择 buy/sell legs · 单合约 = 100 股",

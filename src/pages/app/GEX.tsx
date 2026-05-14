@@ -161,7 +161,7 @@ export default function GEX() {
               <TabsTrigger value="oi" className="text-xs font-mono">OI</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="w-72"><TickerSearch onSelect={t => setTicker(t.ticker)} /></div>
+          <div className="w-72"><TickerSearch current={ticker} onSelect={t => setTicker(t.ticker)} /></div>
         </div>
       </div>
 

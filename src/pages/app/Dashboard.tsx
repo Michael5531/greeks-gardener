@@ -45,7 +45,7 @@ export default function Dashboard() {
       {selectedTicker && <HeroTicker ticker={selectedTicker} />}
 
       <div className="max-w-xl">
-        <TickerSearch onSelect={t => add(t.ticker)} />
+        <TickerSearch current={selectedTicker} onSelect={t => add(t.ticker)} />
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">

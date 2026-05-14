@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Search, Star, Check } from "lucide-react";
+import { Search, Star, Check, X } from "lucide-react";
 import { searchTickers } from "@/lib/polygon";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n";
+import { toast } from "sonner";
 
-export default function TickerSearch({ onSelect }: { onSelect: (t: { ticker: string; name: string }) => void }) {
+export default function TickerSearch({ onSelect, current }: { onSelect: (t: { ticker: string; name: string }) => void; current?: string }) {
   const tx = useT();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -41,19 +42,37 @@ export default function TickerSearch({ onSelect }: { onSelect: (t: { ticker: str
   function confirm() {
     const tk = (staged?.ticker || q).trim().toUpperCase();
     if (!tk) return;
+    if (tk === (current || "").toUpperCase()) {
+      // Same ticker — just clear input, no toast
+      setStaged(null);
+      setQ("");
+      setOpen(false);
+      return;
+    }
     onSelect({ ticker: tk, name: staged?.name ?? "" });
+    toast.success(`${tx.ticker.switchedTo} ${tk}`);
     setStaged(null);
     setQ("");
     setOpen(false);
   }
 
+  const showCurrent = !!current && !q && !staged;
+  const placeholder = current ? tx.ticker.searchAnother : tx.ticker.placeholder;
+
   return (
     <div className="relative flex items-center gap-2">
       <div className="relative flex-1">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        {showCurrent ? (
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-mono font-semibold text-primary pointer-events-none">
+            <span className="opacity-70">{tx.ticker.current}</span>
+            <span>{current}</span>
+          </span>
+        ) : (
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        )}
         <Input
-          className="pl-9 pr-9 font-mono"
-          placeholder={tx.ticker.placeholder}
+          className={showCurrent ? "pl-[120px] pr-9 font-mono" : "pl-9 pr-9 font-mono"}
+          placeholder={placeholder}
           value={q}
           onChange={e => { setQ(e.target.value.toUpperCase()); setStaged(null); }}
           onFocus={() => setOpen(true)}
@@ -62,6 +81,16 @@ export default function TickerSearch({ onSelect }: { onSelect: (t: { ticker: str
         />
         {staged && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{tx.ticker.pending}</span>
+        )}
+        {q && !staged && (
+          <button
+            type="button"
+            onMouseDown={e => { e.preventDefault(); setQ(""); setStaged(null); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            title={tx.ticker.clear}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
       <Button type="button" size="icon" variant="secondary" onMouseDown={e => { e.preventDefault(); confirm(); }} title={tx.ticker.confirmTitle}>
