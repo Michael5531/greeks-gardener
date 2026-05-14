@@ -5,6 +5,7 @@ import { useOptionsChain } from "@/hooks/useOptionsChain";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt, fmtPct } from "@/lib/optionUtils";
 import OptionQuoteHistory from "@/components/OptionQuoteHistory";
+import HelpPopover from "@/components/HelpPopover";
 
 export default function Chain() {
   const [ticker, setTicker] = useSelectedTicker();
@@ -126,12 +127,12 @@ function ChainTable({ title, rows, accent, spot, scrollRef, onScroll, onRowClick
             <tr>
               <th className="text-right px-2 py-1.5">Strike</th>
               <th className="text-right px-2 py-1.5">Bid/Ask</th>
-              <th className="text-right px-2 py-1.5">IV</th>
-              <th className="text-right px-2 py-1.5">Δ</th>
-              <th className="text-right px-2 py-1.5">Γ</th>
-              <th className="text-right px-2 py-1.5">Θ</th>
-              <th className="text-right px-2 py-1.5">OI</th>
-              <th className="text-right px-2 py-1.5">Vol</th>
+              <th className="text-right px-2 py-1.5"><span className="inline-flex items-center justify-end">IV<HelpPopover term="iv" /></span></th>
+              <th className="text-right px-2 py-1.5"><span className="inline-flex items-center justify-end">Δ<HelpPopover term="delta" /></span></th>
+              <th className="text-right px-2 py-1.5"><span className="inline-flex items-center justify-end">Γ<HelpPopover term="gamma" /></span></th>
+              <th className="text-right px-2 py-1.5"><span className="inline-flex items-center justify-end">Θ<HelpPopover term="theta" /></span></th>
+              <th className="text-right px-2 py-1.5"><span className="inline-flex items-center justify-end">OI<HelpPopover term="oi" /></span></th>
+              <th className="text-right px-2 py-1.5"><span className="inline-flex items-center justify-end">Vol<HelpPopover term="volume" /></span></th>
             </tr>
           </thead>
           <tbody>
