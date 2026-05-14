@@ -63,7 +63,9 @@ export default function SingleTradeSim({ ticker }: { ticker: string }) {
           legs: legs.map(l => ({
             type: l.type, side: l.side, strike: l.strike,
             expiration: l.expiration, qty: l.qty, iv: l.iv,
-            entry_premium: l.mid,
+            // 不传 entry_premium：后端按 BS 在入场日定价（与历史一致）。
+            // 传 current_mid：让最后一天直接用市场实际 mid 计算 PnL，避免 BS 模型偏差。
+            current_mid: l.mid,
           })),
         },
       });
