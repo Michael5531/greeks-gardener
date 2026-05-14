@@ -170,7 +170,13 @@ export default function Backtest() {
       {strategy === "custom" ? (
         <OptionPricer externalTicker={ticker} externalSpot={spot} />
       ) : (
-        <StrategyCard strategyId={strategy} ticker={ticker} dte={Number(dte)} iv={Number(iv)} />
+        <StrategyCard
+          strategyId={strategy}
+          ticker={ticker}
+          dte={Number(dte)}
+          iv={Number(iv)}
+          onBacktest={def.engineSupported ? run : undefined}
+        />
       )}
 
       <MiniGEX ticker={ticker} spot={spot} />
