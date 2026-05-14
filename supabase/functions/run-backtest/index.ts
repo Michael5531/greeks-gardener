@@ -9,6 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ---- date helpers ----
+const NY_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+});
+function nyDate(ts: number): string { return NY_FMT.format(new Date(ts)); } // YYYY-MM-DD
+function parseDateUTC(d: string): number { return Date.parse(d + "T00:00:00Z"); }
+
 function erf(x: number) {
   const sign = x < 0 ? -1 : 1;
   x = Math.abs(x);
@@ -19,13 +26,29 @@ function erf(x: number) {
   return sign * y;
 }
 const N = (x: number) => 0.5 * (1 + erf(x / Math.SQRT2));
+const phi = (x: number) => Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
 
-function bs(S: number, K: number, T: number, r: number, sigma: number, type: "call" | "put") {
+function bs(S: number, K: number, T: number, r: number, sigma: number, type: "call" | "put", q = 0) {
   if (T <= 0) return Math.max(0, type === "call" ? S - K : K - S);
-  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+  const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
   const d2 = d1 - sigma * Math.sqrt(T);
-  if (type === "call") return S * N(d1) - K * Math.exp(-r * T) * N(d2);
-  return K * Math.exp(-r * T) * N(-d2) - S * N(-d1);
+  if (type === "call") return S * Math.exp(-q * T) * N(d1) - K * Math.exp(-r * T) * N(d2);
+  return K * Math.exp(-r * T) * N(-d2) - S * Math.exp(-q * T) * N(-d1);
+}
+
+function bsGreeks(S: number, K: number, T: number, r: number, sigma: number, type: "call" | "put", q = 0) {
+  if (T <= 0 || sigma <= 0) return { delta: 0, gamma: 0, theta: 0, vega: 0 };
+  const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+  const d2 = d1 - sigma * Math.sqrt(T);
+  const eqT = Math.exp(-q * T);
+  const erT = Math.exp(-r * T);
+  const delta = type === "call" ? eqT * N(d1) : eqT * (N(d1) - 1);
+  const gamma = eqT * phi(d1) / (S * sigma * Math.sqrt(T));
+  const vega = S * eqT * phi(d1) * Math.sqrt(T) / 100; // per 1 vol-pt
+  const theta = (-S * eqT * phi(d1) * sigma / (2 * Math.sqrt(T))
+    - (type === "call" ? 1 : -1) * r * K * erT * N((type === "call" ? 1 : -1) * d2)
+    + (type === "call" ? 1 : -1) * q * S * eqT * N((type === "call" ? 1 : -1) * d1)) / 365;
+  return { delta, gamma, theta, vega };
 }
 
 // Bisection IV solver. Returns null on failure.
@@ -97,6 +120,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+    const mode = body.mode ?? "strategy_loop";
+
+    // ===================== SINGLE TRADE WHAT-IF =====================
+    if (mode === "single_trade") {
+      return await runSingleTrade(body, apiKey);
+    }
+
     const {
       ticker, start_date, end_date,
       strategy_type = "covered_call",
@@ -106,8 +136,8 @@ Deno.serve(async (req) => {
       custom_legs,
     } = body;
 
-    // Pull daily aggregates from Polygon
-    const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
+    // Pull RAW (unadjusted) daily aggregates so prices match the chain/last-trade view.
+    const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=false&sort=asc&limit=5000&apiKey=${apiKey}`;
     const r = await fetch(url);
     const data = await r.json();
     if (!data.results?.length) return json({ error: "no price data", details: data }, 400);
@@ -178,7 +208,7 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
-      const date = new Date(bar.t).toISOString().slice(0, 10);
+      const date = nyDate(bar.t);
       const S = bar.c;
       const sigma = ivPerBar[i];
 
@@ -222,7 +252,20 @@ Deno.serve(async (req) => {
         };
       }
 
-      equity.push({ date, value: cash });
+      // Mark-to-market: include open position MTM in equity so the curve isn't flat between trades.
+      let openPnl = 0;
+      if (position) {
+        const T = Math.max(0, (position.expiry - bar.t) / (1000 * 60 * 60 * 24 * 365));
+        let nowVal = 0, entryVal = 0;
+        for (const l of position.legs) {
+          const sign = l.side === "long" ? 1 : -1;
+          const q = (l as any).qty ?? 1;
+          nowVal += sign * legPrice(S, l.strike, T, l.type, sigma) * q;
+          entryVal += sign * l.entry_premium * q;
+        }
+        openPnl = (nowVal - entryVal) * 100;
+      }
+      equity.push({ date, value: cash + openPnl, spot: S });
     }
 
     // Metrics
@@ -260,6 +303,97 @@ Deno.serve(async (req) => {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
+
+// ===================== SINGLE TRADE IMPLEMENTATION =====================
+async function runSingleTrade(body: any, apiKey: string) {
+  const ticker: string = String(body.ticker ?? "").toUpperCase();
+  const entry_date: string = body.entry_date;
+  if (!ticker || !entry_date) return json({ error: "ticker & entry_date required" }, 400);
+
+  const legs = Array.isArray(body.legs) ? body.legs : [];
+  if (!legs.length) return json({ error: "legs required" }, 400);
+
+  const r = Number(body.bs?.r ?? 0.045);
+  const q = Number(body.bs?.q ?? 0);
+  const ivOverride = body.bs?.iv != null ? Number(body.bs.iv) : null;
+
+  const expiries = legs.map((l: any) => l.expiration).filter(Boolean) as string[];
+  if (!expiries.length) return json({ error: "every leg needs an expiration" }, 400);
+  const maxExp = expiries.sort().at(-1)!;
+  const end_date: string = body.end_date ?? maxExp;
+
+  // Pull RAW daily bars across full window
+  const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${entry_date}/${end_date}?adjusted=false&sort=asc&limit=5000&apiKey=${apiKey}`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+  if (!data.results?.length) return json({ error: "no price data for ticker/window", details: data }, 400);
+
+  const bars: { t: number; c: number; o: number; h: number; l: number; date: string }[] =
+    data.results.map((b: any) => ({ t: b.t, c: b.c, o: b.o, h: b.h, l: b.l, date: nyDate(b.t) }));
+
+  // Entry spot: override if provided, else first bar's close
+  const S0 = body.entry_spot_override != null && Number.isFinite(+body.entry_spot_override)
+    ? +body.entry_spot_override
+    : bars[0].c;
+
+  // Materialise legs with entry premium (BS-derived if not provided)
+  const t0 = parseDateUTC(bars[0].date);
+  const fullLegs = legs.map((l: any) => {
+    const type: "call" | "put" = l.type === "put" ? "put" : "call";
+    const side: "long" | "short" = l.side === "short" ? "short" : "long";
+    const strike = +l.strike;
+    const expiration: string = l.expiration;
+    const qty = +(l.qty ?? 1);
+    const ivLeg = ivOverride != null ? ivOverride : Number(l.iv ?? 0.3);
+    const T0 = Math.max((parseDateUTC(expiration) - t0) / (365 * 86400000), 1 / 365);
+    const entry_premium = l.entry_premium != null && Number.isFinite(+l.entry_premium)
+      ? +l.entry_premium
+      : bs(S0, strike, T0, r, ivLeg, type, q);
+    return { type, side, strike, expiration, qty, iv: ivLeg, entry_premium };
+  });
+
+  // Per-day timeline
+  const timeline: any[] = [];
+  for (const bar of bars) {
+    const tNow = parseDateUTC(bar.date);
+    let netPremium = 0, pnl = 0;
+    let netDelta = 0, netGamma = 0, netTheta = 0, netVega = 0;
+    const legsOut: any[] = [];
+    for (const l of fullLegs) {
+      const T = Math.max((parseDateUTC(l.expiration) - tNow) / (365 * 86400000), 0);
+      const px = bs(bar.c, l.strike, T, r, l.iv, l.type, q);
+      const g = bsGreeks(bar.c, l.strike, T, r, l.iv, l.type, q);
+      const sign = l.side === "long" ? 1 : -1;
+      netPremium += sign * px * l.qty;
+      pnl += sign * (px - l.entry_premium) * l.qty * 100;
+      netDelta += sign * g.delta * l.qty;
+      netGamma += sign * g.gamma * l.qty;
+      netTheta += sign * g.theta * l.qty * 100;
+      netVega += sign * g.vega * l.qty * 100;
+      legsOut.push({ strike: l.strike, type: l.type, side: l.side, qty: l.qty, T: +T.toFixed(4), price: +px.toFixed(4) });
+    }
+    timeline.push({
+      date: bar.date, spot: +bar.c.toFixed(4),
+      open: +bar.o.toFixed(4), high: +bar.h.toFixed(4), low: +bar.l.toFixed(4),
+      net_premium: +netPremium.toFixed(4), pnl: +pnl.toFixed(2),
+      delta: +netDelta.toFixed(4), gamma: +netGamma.toFixed(5),
+      theta: +netTheta.toFixed(2), vega: +netVega.toFixed(2),
+      legs: legsOut,
+    });
+  }
+
+  const pnlSeries = timeline.map(p => p.pnl);
+  const summary = {
+    entry_date: bars[0].date, entry_spot: S0,
+    end_date: bars.at(-1)!.date,
+    final_pnl: pnlSeries.at(-1) ?? 0,
+    max_pnl: Math.max(...pnlSeries),
+    min_pnl: Math.min(...pnlSeries),
+    days: timeline.length,
+  };
+
+  return json({ mode: "single_trade", ticker, summary, legs: fullLegs, timeline });
+}
 
 function inverseNormal(p: number) {
   // Beasley-Springer/Moro
