@@ -48,7 +48,7 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function polygonFetchJson(target: string, tries = 6): Promise<{ data: any; status: number }> {
+async function polygonFetchJson(target: string, tries = 3): Promise<{ data: any; status: number }> {
   const run = async () => {
     let last: any = null;
     const since = Date.now() - polygonLastAt;
@@ -62,7 +62,13 @@ async function polygonFetchJson(target: string, tries = 6): Promise<{ data: any;
         const softRateLimit = dd?.status === "ERROR" && `${dd?.error ?? dd?.message ?? ""}`.toLowerCase().includes("maximum requests per minute");
         if (rr.status === 429 || softRateLimit || (rr.status >= 500 && rr.status < 600)) {
           last = dd;
-          const waitMs = Math.min(18_000, 1_200 * Math.pow(2, i)) + Math.floor(Math.random() * 350);
+          // Keep waits short — the function has a CPU/wall budget and long
+          // serialized retries cause WORKER_RESOURCE_LIMIT errors. Let the
+          // client retry instead of holding the worker.
+          if (i === tries - 1) {
+            return { data: dd, status: rr.status };
+          }
+          const waitMs = Math.min(2_500, 700 * Math.pow(2, i)) + Math.floor(Math.random() * 200);
           console.warn(`[polygon-proxy] retry ${i + 1}/${tries} status=${rr.status} wait=${waitMs}ms`);
           await wait(waitMs);
           continue;
