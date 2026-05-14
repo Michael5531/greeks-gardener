@@ -254,6 +254,16 @@ export default function OptionQuoteHistory({
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">日内日期</span>
           <DatePicker value={date} onChange={setDate} />
+          <span className="text-xs text-muted-foreground">历史范围</span>
+          <Select value={historyRange} onValueChange={(v) => setHistoryRange(v as HistoryRange)}>
+            <SelectTrigger className="h-8 w-28 text-xs font-mono"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1y">1 年</SelectItem>
+              <SelectItem value="3y">3 年</SelectItem>
+              <SelectItem value="5y">5 年</SelectItem>
+              <SelectItem value="max">最长</SelectItem>
+            </SelectContent>
+          </Select>
           <Button size="sm" variant="outline" onClick={() => { loadIntraday(); loadHistory(); }} disabled={loading}>
             {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "刷新"}
           </Button>
@@ -366,9 +376,11 @@ export default function OptionQuoteHistory({
           </TabsContent>
 
           <TabsContent value="history" className="space-y-3">
-            <ChartCard title="期权日 K 线（过去 1 年）" height={280}>
+            <ChartCard title={`期权日 K 线（${HISTORY_LABEL[historyRange]}，按合约上市日期显示）`} height={280}>
               {optKline.length === 0 ? (
-                <div className="grid h-full place-items-center text-xs text-muted-foreground">暂无历史数据</div>
+                <div className="grid h-full place-items-center text-xs text-muted-foreground text-center px-4">
+                  暂无历史 K 线；部分新上市或远月合约本身可能只有很短交易历史
+                </div>
               ) : (
                 <ChartSizer>{({ width, height }) => (
                   <ComposedChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
@@ -391,7 +403,7 @@ export default function OptionQuoteHistory({
               )}
             </ChartCard>
 
-            <ChartCard title={`标的 ${underlying ?? ""} 同期走势`} height={220}>
+            <ChartCard title={`标的 ${underlying ?? ""} 同期走势（${HISTORY_LABEL[historyRange]}）`} height={220}>
               {spotKline.length === 0 ? (
                 <div className="grid h-full place-items-center text-xs text-muted-foreground">暂无数据</div>
               ) : (
