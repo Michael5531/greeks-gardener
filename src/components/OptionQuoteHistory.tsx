@@ -77,9 +77,18 @@ export default function OptionQuoteHistory({
           gte: isoToNs(date, false), lte: isoToNs(date, true),
           limit: 50000,
         });
-        setQuotes(r.quotes ?? []);
-        setSpotMin(r.underlying_minutes ?? []);
-        if (r.fallback && r.messages?.length) setError(r.messages.join("；"));
+        const qs = r.quotes ?? [];
+        const um = r.underlying_minutes ?? [];
+        setQuotes(qs);
+        setSpotMin(um);
+        // Only treat as a hard error if the option quotes themselves failed.
+        // If only the underlying 1-min aggregates are missing (plan limits / off-hours),
+        // keep the bid/ask chart visible and just log the warning.
+        if (qs.length === 0 && r.messages?.length) {
+          setError(r.messages.join("；"));
+        } else if (r.messages?.length) {
+          console.warn("[OptionQuoteHistory] underlying minutes warning", r.messages);
+        }
       } else {
         const q = await getOptionQuotes(optionTicker, {
           gte: isoToNs(date, false), lte: isoToNs(date, true),
