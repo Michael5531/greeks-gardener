@@ -124,7 +124,13 @@ export default function OptionQuoteHistory({
 
   // Look up spot at a timestamp from 1-min bars (carry-forward).
   const spotAt = useMemo(() => {
-    if (!spotMin.length) return (_: number) => null as number | null;
+    // Prefer 1-min bars on the chosen day; fall back to most recent daily close
+    // so IV/Greeks still render when intraday minute aggregates are unavailable
+    // (off-hours, free tier, or missing minute data for the symbol).
+    const fallback = spotDaily.length ? spotDaily[spotDaily.length - 1].c : null;
+    if (!spotMin.length) {
+      return (_: number) => fallback;
+    }
     const arr = spotMin.map(b => ({ t: b.t, c: b.c })).sort((a, b) => a.t - b.t);
     return (ts: number) => {
       let lo = 0, hi = arr.length - 1, idx = -1;
@@ -132,9 +138,9 @@ export default function OptionQuoteHistory({
         const mid = (lo + hi) >> 1;
         if (arr[mid].t <= ts) { idx = mid; lo = mid + 1; } else hi = mid - 1;
       }
-      return idx >= 0 ? arr[idx].c : arr[0].c;
+      return idx >= 0 ? arr[idx].c : (arr[0]?.c ?? fallback);
     };
-  }, [spotMin]);
+  }, [spotMin, spotDaily]);
 
   // Per-tick implied vol + greeks for the chosen day.
   const greeksIntra = useMemo(() => {
@@ -266,7 +272,13 @@ export default function OptionQuoteHistory({
 
             <ChartCard title="IV 隐含波动率（%）— 由 mid 反解" height={200}>
               {greeksIntra.length === 0 ? (
-                <div className="grid h-full place-items-center text-xs text-muted-foreground">需要标的 + 合约信息</div>
+                <div className="grid h-full place-items-center text-xs text-muted-foreground text-center px-4">
+                  {!underlying || !strike || !expiration || !type
+                    ? "缺少合约元数据"
+                    : chartData.length === 0
+                      ? "该日无报价，无法反解 IV"
+                      : "无法获取标的同期价格（分钟与日线均为空），无法计算 IV/Greeks"}
+                </div>
               ) : (
                 <ChartSizer>{({ width, height }) => (
                   <LineChart width={width} height={height} data={greeksIntra} margin={{ top: 4, right: 16, left: 0, bottom: 20 }}>
