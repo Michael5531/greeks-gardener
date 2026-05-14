@@ -19,6 +19,8 @@ const TTL: Record<string, number> = {
   "options-snapshot-chain": 20_000,
   "option-snapshot-single": 10_000,
   "option-aggregates": 5 * 60_000,
+  "option-intraday-pair": 30_000,
+  "option-history-pair": 5 * 60_000,
   "search-tickers": 5 * 60_000,
   "market-status": 60_000,
 };
