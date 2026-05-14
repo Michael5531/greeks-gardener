@@ -405,19 +405,25 @@ async function runSingleTrade(body: any, apiKey: string) {
     const entry_premium = l.entry_premium != null && Number.isFinite(+l.entry_premium)
       ? +l.entry_premium
       : bs(S0, strike, T0, r, ivLeg, type, q);
-    return { type, side, strike, expiration, qty, iv: ivLeg, entry_premium };
+    const current_mid = l.current_mid != null && Number.isFinite(+l.current_mid) ? +l.current_mid : null;
+    return { type, side, strike, expiration, qty, iv: ivLeg, entry_premium, current_mid };
   });
 
   // Per-day timeline
   const timeline: any[] = [];
-  for (const bar of bars) {
+  for (let bi = 0; bi < bars.length; bi++) {
+    const bar = bars[bi];
+    const isLast = bi === bars.length - 1;
     const tNow = parseDateUTC(bar.date);
     let netPremium = 0, pnl = 0;
     let netDelta = 0, netGamma = 0, netTheta = 0, netVega = 0;
     const legsOut: any[] = [];
     for (const l of fullLegs) {
       const T = Math.max((parseDateUTC(l.expiration) - tNow) / (365 * 86400000), 0);
-      const px = bs(bar.c, l.strike, T, r, l.iv, l.type, q);
+      // 最后一天若客户端传了实时市场 mid，用 mid 覆写 BS 模型价（避免与盘面偏差导致 PnL 失真）
+      const px = isLast && (l as any).current_mid != null
+        ? (l as any).current_mid
+        : bs(bar.c, l.strike, T, r, l.iv, l.type, q);
       const g = bsGreeks(bar.c, l.strike, T, r, l.iv, l.type, q);
       const sign = l.side === "long" ? 1 : -1;
       netPremium += sign * px * l.qty;
