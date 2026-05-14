@@ -100,6 +100,30 @@ function withApiKey(url: string, apiKey: string) {
   return u.toString();
 }
 
+function yahooSession(meta: any) {
+  const explicit = String(meta?.marketState || "").toUpperCase();
+  if (explicit) return explicit;
+  const now = Math.floor(Date.now() / 1000);
+  const p = meta?.currentTradingPeriod ?? {};
+  if (now >= p.pre?.start && now < p.pre?.end) return "PRE";
+  if (now >= p.regular?.start && now < p.regular?.end) return "REGULAR";
+  if (now >= p.post?.start && now < p.post?.end) return "POST";
+  return "CLOSED";
+}
+
+function yahooBarsFromChart(res0: any) {
+  const ts: number[] = res0?.timestamp ?? [];
+  const q = res0?.indicators?.quote?.[0] ?? {};
+  return ts.map((t: number, i: number) => ({
+    t: t * 1000,
+    o: q.open?.[i] ?? q.close?.[i] ?? null,
+    h: q.high?.[i] ?? q.close?.[i] ?? null,
+    l: q.low?.[i] ?? q.close?.[i] ?? null,
+    c: q.close?.[i] ?? null,
+    v: q.volume?.[i] ?? 0,
+  })).filter((b: any) => b.c != null);
+}
+
 async function optionQuoteDailyBars(optionTicker: string, from: string, to: string, apiKey: string, ttl: number, maxPages = 24) {
   const byDay = new Map<string, any>();
   let next = `${POLYGON_BASE}/v3/quotes/${encodeURIComponent(optionTicker)}?timestamp.gte=${isoToNs(from)}&timestamp.lte=${isoToNs(to, true)}&order=asc&limit=50000&sort=timestamp`;
