@@ -168,8 +168,7 @@ Deno.serve(async (req) => {
 
     // Pull RAW (unadjusted) daily aggregates so prices match the chain/last-trade view.
     const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${start_date}/${end_date}?adjusted=false&sort=asc&limit=5000&apiKey=${apiKey}`;
-    const r = await fetch(url);
-    const data = await r.json();
+    const data = await polyFetch(url);
     if (!data.results?.length) return json({ error: "no price data", details: data }, 400);
 
     const bars: { t: number; c: number }[] = data.results.map((b: any) => ({ t: b.t, c: b.c }));
@@ -354,9 +353,20 @@ async function runSingleTrade(body: any, apiKey: string) {
 
   // Pull RAW daily bars across full window
   const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${entry_date}/${end_date}?adjusted=false&sort=asc&limit=5000&apiKey=${apiKey}`;
-  const resp = await fetch(url);
-  const data = await resp.json();
-  if (!data.results?.length) return json({ error: "no price data for ticker/window", details: data }, 400);
+  let data: any;
+  try { data = await polyFetch(url); }
+  catch (e: any) {
+    return json({
+      error: "Polygon 数据源暂时不可用（可能触发限速）。请等 30 秒重试，或缩小日期窗口。",
+      details: String(e?.message ?? e),
+    }, 429);
+  }
+  if (!data?.results?.length) {
+    const hint = data?.error?.toLowerCase?.().includes("maximum requests")
+      ? "Polygon 限速，请等 30–60 秒后再试。"
+      : `区间 ${entry_date} → ${end_date} 在 Polygon 上没有 ${ticker} 的日 K（可能是非交易日 / 未来日期 / 标的不存在）。`;
+    return json({ error: hint, details: data }, 400);
+  }
 
   const bars: { t: number; c: number; o: number; h: number; l: number; date: string }[] =
     data.results.map((b: any) => ({ t: b.t, c: b.c, o: b.o, h: b.h, l: b.l, date: nyDate(b.t) }));
