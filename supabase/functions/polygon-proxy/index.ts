@@ -270,12 +270,24 @@ Deno.serve(async (req) => {
           safeCachedPolygon(`hist-opt:${option_ticker}|${from}|${to}`, ttl, optionTarget),
           safeCachedPolygon(`hist-stock:${underlying}|${from}|${to}`, ttl, stockTarget),
         ]);
+        let optionBars = optionR.data?.results ?? [];
+        const messages = [optionR.data?.message ?? optionR.data?.error, stockR.data?.message ?? stockR.data?.error].filter(Boolean);
+        let source = "aggs";
+        if (optionBars.length < 30) {
+          const quoteDaily = await optionQuoteDailyBars(option_ticker, from, to, apiKey, ttl);
+          if (quoteDaily.bars.length > optionBars.length) {
+            optionBars = quoteDaily.bars;
+            source = "quotes_mid_daily";
+            messages.push(`期权聚合日K只有 ${optionR.data?.results?.length ?? 0} 根，已用历史 bid/ask mid 重建为 ${quoteDaily.bars.length} 根日K`);
+          }
+        }
         return json({
           status: "OK",
-          option: optionR.data?.results ?? [],
+          option: optionBars,
           underlying: stockR.data?.results ?? [],
+          option_source: source,
           fallback: optionR.status >= 400 || stockR.status >= 400,
-          messages: [optionR.data?.message ?? optionR.data?.error, stockR.data?.message ?? stockR.data?.error].filter(Boolean),
+          messages,
         });
       }
       case "market-status": {
