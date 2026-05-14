@@ -12,7 +12,7 @@ const TTL: Record<string, number> = {
   // Underlying snapshot — many components mount useLiveQuote for the same
   // ticker; cache briefly so multiple cards share the request, but refresh
   // fast enough that dashboard prices feel live.
-  "ticker-snapshot": 4_000,
+  "ticker-snapshot": 8_000,
   "stock-aggregates": 5 * 60_000,
   "options-expirations": 10 * 60_000,
   "options-contracts": 5 * 60_000,

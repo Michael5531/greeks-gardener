@@ -67,7 +67,8 @@ export default function MarketStatusBar() {
   const [ticker] = useSelectedTicker();
   const now = useETClock();
   const session = useMemo(() => computeSessionET(now), [now]);
-  const { quote, refresh } = useLiveQuote(ticker || null, session === "regular" ? 3000 : session === "closed" ? 30000 : 8000);
+  // Unified 15s polling across all sessions; closed market polls a bit slower.
+  const { quote, refresh } = useLiveQuote(ticker || null, session === "closed" ? 30_000 : 15_000);
   const sessionLabel: Record<MarketSession, string> = { pre: t.market.pre, regular: t.market.regular, after: t.market.after, closed: t.market.closed };
 
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
@@ -134,6 +135,14 @@ export default function MarketStatusBar() {
               >
                 {quote?.price != null ? `$${quote.price.toFixed(2)}` : "—"}
               </div>
+              {(session === "pre" || session === "after") && quote?.price != null && (
+                <span
+                  title={t.market.extTip}
+                  className="px-1 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent text-[9px] uppercase tracking-wider"
+                >
+                  {t.market.ext}
+                </span>
+              )}
               {quote?.change != null && (
                 <div className={cn("tabular-nums text-[11px]", quote.change >= 0 ? "text-bull" : "text-bear")}>
                   {quote.change >= 0 ? "+" : ""}{quote.change.toFixed(2)} ({quote.changePct != null ? (quote.changePct * 100).toFixed(2) : "0.00"}%)
