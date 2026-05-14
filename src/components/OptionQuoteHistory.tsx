@@ -12,7 +12,7 @@ import {
 import ChartSizer from "@/components/charts/ChartSizer";
 import { getOptionQuotes, callPolygon } from "@/lib/polygon";
 import { fmt } from "@/lib/optionUtils";
-import { bsImpliedVol, bsGreeks, type OptType } from "@/lib/blackScholes";
+import { bsImpliedVol, bsGreeks, bsPrice, type OptType } from "@/lib/blackScholes";
 
 function todayISO() {
   const d = new Date();
@@ -52,10 +52,11 @@ export interface OptionQuoteHistoryProps {
   /** ISO yyyy-mm-dd */
   expiration?: string;
   type?: OptType;
+  initialIv?: number;
 }
 
 export default function OptionQuoteHistory({
-  open, onOpenChange, optionTicker, label, underlying, strike, expiration, type,
+  open, onOpenChange, optionTicker, label, underlying, strike, expiration, type, initialIv,
 }: OptionQuoteHistoryProps) {
   const [date, setDate] = useState<string>(todayISO());
   const [loading, setLoading] = useState(false);
@@ -224,6 +225,35 @@ export default function OptionQuoteHistory({
       };
     });
   }, [optDaily, spotDaily, strike, expiration, type]);
+
+  const modelIv = useMemo(() => {
+    const actual = optKline.map(d => d.iv).filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
+    if (actual.length) return actual.sort((a, b) => a - b)[Math.floor(actual.length / 2)] / 100;
+    return initialIv && initialIv > 0 ? initialIv : null;
+  }, [optKline, initialIv]);
+
+  const modeledKline = useMemo(() => {
+    if (!spotDaily.length || !strike || !expiration || !type || !modelIv) return [];
+    const expMs = new Date(expiration + "T16:00:00").getTime();
+    return spotDaily
+      .filter(b => b.t <= expMs)
+      .map(b => {
+        const T = Math.max((expMs - b.t) / (365 * 24 * 3600 * 1000), 1 / 365);
+        const prices = [b.o, b.h, b.l, b.c].map((s: number) => bsPrice(s, strike, T, 0.045, modelIv, type));
+        return {
+          t: b.t,
+          day: new Date(b.t).toISOString().slice(0, 10),
+          o: prices[0], h: Math.max(...prices), l: Math.min(...prices), c: prices[3], v: 0,
+          range: [Math.min(...prices), Math.max(...prices)] as [number, number],
+          iv: modelIv * 100,
+          spot: b.c,
+          source: "bs_model",
+        };
+      });
+  }, [spotDaily, strike, expiration, type, modelIv]);
+
+  const displayOptKline = optKline.length >= 30 || modeledKline.length <= optKline.length ? optKline : modeledKline;
+  const displayHistorySource = displayOptKline === modeledKline ? "bs_model" : historySource;
 
   const spotKline = useMemo(() => spotDaily.map(b => ({
     t: b.t, o: b.o, h: b.h, l: b.l, c: b.c,
