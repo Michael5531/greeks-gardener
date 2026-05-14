@@ -15,7 +15,7 @@ export type LiveQuote = {
  * Default underlying-price refresh interval. Callers may pass a custom
  * value (e.g. 3s during regular session, 30s when closed).
  */
-export const UNDERLYING_REFRESH_MS = 8_000;
+export const UNDERLYING_REFRESH_MS = 15_000;
 
 export function useLiveQuote(ticker: string | null, intervalMs = UNDERLYING_REFRESH_MS) {
   const [quote, setQuote] = useState<LiveQuote | null>(null);

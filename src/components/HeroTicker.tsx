@@ -19,7 +19,9 @@ export default function HeroTicker({ ticker }: { ticker: string }) {
   const t = useT();
   const session = computeSessionET();
   const isOpen = session === "regular" || session === "after";
-  const refreshMs = session === "regular" ? 3000 : session === "closed" ? 30000 : 8000;
+  const isExt = session === "pre" || session === "after";
+  // Unified 15s polling for stability across sessions.
+  const refreshMs = session === "closed" ? 30_000 : 15_000;
   const { quote } = useLiveQuote(ticker, refreshMs);
 
   const intradayDate = isOpen ? todayISO() : prevWeekdayISO();
@@ -66,6 +68,14 @@ export default function HeroTicker({ ticker }: { ticker: string }) {
           <div className="text-3xl font-mono font-semibold">
             {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
           </div>
+          {isExt && displayPrice != null && (
+            <span
+              title={t.market.extTip}
+              className="px-1.5 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent text-[9px] font-mono uppercase tracking-wider"
+            >
+              {t.market.ext}
+            </span>
+          )}
           {quote?.change != null && (
             <div className={cn("text-xs font-mono flex items-center gap-1", liveUp ? "text-bull" : "text-bear")}>
               {liveUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}

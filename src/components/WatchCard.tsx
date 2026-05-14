@@ -19,7 +19,9 @@ export default function WatchCard({
 }) {
   const t = useT();
   const session = computeSessionET();
-  const refreshMs = session === "regular" ? 5000 : session === "closed" ? 60000 : 15000;
+  const isExt = session === "pre" || session === "after";
+  // Unified 15s polling; closed market slows to 60s.
+  const refreshMs = session === "closed" ? 60_000 : 15_000;
   const { quote } = useLiveQuote(ticker, refreshMs);
   const { bars } = useStockBars(ticker, yearStartISO(), todayISO(), "day", 1);
 
@@ -46,6 +48,14 @@ export default function WatchCard({
         <div>
           <div className="font-mono font-bold text-lg">{ticker}</div>
           <div className="font-mono text-2xl mt-1">{price != null ? `$${price.toFixed(2)}` : "—"}</div>
+          {isExt && price != null && (
+            <span
+              title={t.market.extTip}
+              className="inline-block mt-1 px-1.5 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent text-[9px] font-mono uppercase tracking-wider"
+            >
+              {t.market.ext}
+            </span>
+          )}
           {chg != null && (
             <div className={cn("text-xs font-mono flex items-center gap-1 mt-0.5", up ? "text-bull" : "text-bear")}>
               {up ? <TrendingUp className="h-3 w-3"/> : <TrendingDown className="h-3 w-3"/>}
