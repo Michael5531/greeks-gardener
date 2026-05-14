@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import {
   AreaChart, Area, LineChart, Line, ComposedChart, Bar,
@@ -22,6 +23,23 @@ function isoToNs(iso: string, endOfDay = false): number {
   const dt = new Date(y, (m ?? 1) - 1, d ?? 1, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0);
   return dt.getTime() * 1_000_000;
 }
+
+type HistoryRange = "1y" | "3y" | "5y" | "max";
+
+function historyStartISO(range: HistoryRange) {
+  if (range === "max") return "2005-01-01";
+  const years = range === "5y" ? 5 : range === "3y" ? 3 : 1;
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
+const HISTORY_LABEL: Record<HistoryRange, string> = {
+  "1y": "过去 1 年",
+  "3y": "过去 3 年",
+  "5y": "过去 5 年",
+  max: "最长可用",
+};
 
 export interface OptionQuoteHistoryProps {
   open: boolean;
@@ -47,26 +65,28 @@ export default function OptionQuoteHistory({
   const [optDaily, setOptDaily] = useState<any[]>([]); // daily option OHLC
   const [spotDaily, setSpotDaily] = useState<any[]>([]); // daily underlying bars
   const [tab, setTab] = useState("intraday");
+  const [historyRange, setHistoryRange] = useState<HistoryRange>("max");
 
   async function loadIntraday() {
     if (!optionTicker) return;
     setLoading(true); setError(null);
     try {
-      const tasks: Promise<any>[] = [
-        getOptionQuotes(optionTicker, {
+      if (underlying) {
+        const r = await callPolygon<{ quotes?: any[]; underlying_minutes?: any[]; fallback?: boolean; messages?: string[] }>("option-intraday-pair", {
+          option_ticker: optionTicker, underlying, date,
+          gte: isoToNs(date, false), lte: isoToNs(date, true),
+          limit: 50000,
+        });
+        setQuotes(r.quotes ?? []);
+        setSpotMin(r.underlying_minutes ?? []);
+        if (r.fallback && r.messages?.length) setError(r.messages.join("；"));
+      } else {
+        const q = await getOptionQuotes(optionTicker, {
           gte: isoToNs(date, false), lte: isoToNs(date, true),
           limit: 50000, order: "asc",
-        }),
-      ];
-      if (underlying) {
-        tasks.push(callPolygon<{ results?: any[] }>("stock-aggregates", {
-          ticker: underlying, from: date, to: date, timespan: "minute", multiplier: 1,
-        }).then(r => r.results ?? []));
-      } else {
-        tasks.push(Promise.resolve([]));
+        });
+        setQuotes(q); setSpotMin([]);
       }
-      const [q, m] = await Promise.all(tasks);
-      setQuotes(q); setSpotMin(m);
     } catch (e: any) {
       setError(e?.message ?? "加载失败"); setQuotes([]); setSpotMin([]);
     } finally { setLoading(false); }
@@ -79,29 +99,30 @@ export default function OptionQuoteHistory({
     }
     try {
       const today = todayISO();
-      const from = (() => {
-        const d = new Date(); d.setFullYear(d.getFullYear() - 1);
-        return d.toISOString().slice(0, 10);
-      })();
-      // Fire independently so a failure on one side does not nuke the other.
-      const optP = callPolygon<{ results?: any[] }>("option-aggregates", { option_ticker: optionTicker, from, to: today })
-        .then(r => { setOptDaily(r.results ?? []); })
-        .catch(e => { console.warn("[OptionQuoteHistory] option-aggregates failed", e); setOptDaily([]); });
-      const spP = callPolygon<{ results?: any[] }>("stock-aggregates", { ticker: underlying, from, to: today })
-        .then(r => { setSpotDaily(r.results ?? []); })
-        .catch(e => { console.warn("[OptionQuoteHistory] stock-aggregates failed", e); setSpotDaily([]); });
-      await Promise.allSettled([optP, spP]);
+      const from = historyStartISO(historyRange);
+      const r = await callPolygon<{ option?: any[]; underlying?: any[]; fallback?: boolean; messages?: string[] }>("option-history-pair", {
+        option_ticker: optionTicker, underlying, from, to: today,
+      });
+      setOptDaily(r.option ?? []);
+      setSpotDaily(r.underlying ?? []);
+      if (r.fallback && r.messages?.length) console.warn("[OptionQuoteHistory] partial history fallback", r.messages);
     } catch (e) {
       console.warn("[OptionQuoteHistory] loadHistory error", e);
+      setOptDaily([]); setSpotDaily([]);
     }
   }
 
   useEffect(() => {
     if (!open || !optionTicker) return;
     loadIntraday();
+    /* eslint-disable-next-line */
+  }, [open, optionTicker, date, underlying]);
+
+  useEffect(() => {
+    if (!open || !optionTicker || !underlying) return;
     loadHistory();
     /* eslint-disable-next-line */
-  }, [open, optionTicker, date]);
+  }, [open, optionTicker, underlying, historyRange]);
 
   // Down-sample to ~600 points by binning timestamps for snappy charting.
   const chartData = useMemo(() => {
@@ -238,6 +259,16 @@ export default function OptionQuoteHistory({
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">日内日期</span>
           <DatePicker value={date} onChange={setDate} />
+          <span className="text-xs text-muted-foreground">历史范围</span>
+          <Select value={historyRange} onValueChange={(v) => setHistoryRange(v as HistoryRange)}>
+            <SelectTrigger className="h-8 w-28 text-xs font-mono"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1y">1 年</SelectItem>
+              <SelectItem value="3y">3 年</SelectItem>
+              <SelectItem value="5y">5 年</SelectItem>
+              <SelectItem value="max">最长</SelectItem>
+            </SelectContent>
+          </Select>
           <Button size="sm" variant="outline" onClick={() => { loadIntraday(); loadHistory(); }} disabled={loading}>
             {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "刷新"}
           </Button>
@@ -350,9 +381,11 @@ export default function OptionQuoteHistory({
           </TabsContent>
 
           <TabsContent value="history" className="space-y-3">
-            <ChartCard title="期权日 K 线（过去 1 年）" height={280}>
+            <ChartCard title={`期权日 K 线（${HISTORY_LABEL[historyRange]}，按合约上市日期显示）`} height={280}>
               {optKline.length === 0 ? (
-                <div className="grid h-full place-items-center text-xs text-muted-foreground">暂无历史数据</div>
+                <div className="grid h-full place-items-center text-xs text-muted-foreground text-center px-4">
+                  暂无历史 K 线；部分新上市或远月合约本身可能只有很短交易历史
+                </div>
               ) : (
                 <ChartSizer>{({ width, height }) => (
                   <ComposedChart width={width} height={height} data={optKline} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
@@ -375,7 +408,7 @@ export default function OptionQuoteHistory({
               )}
             </ChartCard>
 
-            <ChartCard title={`标的 ${underlying ?? ""} 同期走势`} height={220}>
+            <ChartCard title={`标的 ${underlying ?? ""} 同期走势（${HISTORY_LABEL[historyRange]}）`} height={220}>
               {spotKline.length === 0 ? (
                 <div className="grid h-full place-items-center text-xs text-muted-foreground">暂无数据</div>
               ) : (
