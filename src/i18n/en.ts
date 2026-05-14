@@ -32,7 +32,7 @@ const en: Dict = {
     footerNote: "Signal research platform · Not investment advice",
   },
   auth: { signIn: "Sign in", signUp: "Sign up", create: "Create account", or: "or", google: "Continue with Google", email: "Email", password: "Password", pwHint: "At least 6 characters", signupOk: "Signed up. Please verify your email to sign in." },
-  ticker: { placeholder: "Search a US ticker, then press Enter or click ✓", pending: "pending", confirmTitle: "Confirm underlying", watchlist: "Watchlist" },
+  ticker: { placeholder: "Search a US ticker, then press Enter or click ✓", pending: "pending", confirmTitle: "Confirm underlying", watchlist: "Watchlist", current: "Current", switchedTo: "Switched to", searchAnother: "Search to switch underlying…", clear: "Clear" },
   pricerExt: {
     title: "Option Value Calculator · Multi-leg",
     sub: "Pick buy/sell legs from the chain · 1 contract = 100 shares",
