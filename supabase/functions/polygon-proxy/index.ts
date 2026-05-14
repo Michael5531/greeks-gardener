@@ -197,12 +197,15 @@ Deno.serve(async (req) => {
         const cachedR = await cachedFetchJson(key, ttl, async () => {
           // 1) Try Yahoo first.
           let yMeta: any = null;
+          let yLast: any = null;
           try {
             const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1m&range=1d&includePrePost=true`;
             const yr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
             if (yr.ok) {
               const yj = await yr.json();
-              yMeta = yj?.chart?.result?.[0]?.meta ?? null;
+              const res0 = yj?.chart?.result?.[0] ?? null;
+              yMeta = res0?.meta ?? null;
+              yLast = yahooBarsFromChart(res0).at(-1) ?? null;
             }
           } catch (_) { /* ignore — fallback below */ }
 
@@ -216,34 +219,37 @@ Deno.serve(async (req) => {
               pPrev = pr.data?.results?.[0] ?? null;
             } catch (_) { /* ignore */ }
           }
-          return { data: { yMeta, pPrev }, status: 200 };
+          return { data: { yMeta, yLast, pPrev }, status: 200 };
         });
 
-        const { yMeta, pPrev } = cachedR.data;
+        const { yMeta, yLast, pPrev } = cachedR.data;
         if (yMeta) {
           const reg = yMeta.regularMarketPrice ?? null;
           const prev = yMeta.chartPreviousClose ?? yMeta.previousClose ?? null;
           const pre = yMeta.preMarketPrice ?? null;
           const post = yMeta.postMarketPrice ?? null;
-          const state = String(yMeta.marketState || "").toUpperCase();
+          const state = yahooSession(yMeta);
+          const last = yLast?.c ?? null;
           // Pick the most relevant live price for the current session.
-          const live = state === "PRE" && pre != null ? pre
-            : (state === "POST" || state === "POSTPOST" || state === "CLOSED") && post != null ? post
-            : reg ?? post ?? pre ?? prev;
+          const live = state === "PRE" ? (pre ?? last ?? reg)
+            : (state === "POST" || state === "POSTPOST") ? (post ?? last ?? reg)
+            : state === "REGULAR" ? (last ?? reg)
+            : (post ?? last ?? reg ?? pre ?? prev);
           return json({
             status: "OK",
             ticker: {
               ticker: sym,
-              lastTrade: live != null ? { p: live, t: Date.now() * 1e6 } : null,
+              lastTrade: live != null ? { p: live, t: (yLast?.t ?? Date.now()) * 1e6 } : null,
               day: { c: reg ?? live },
-              min: live != null ? { c: live, t: Date.now() * 1e6 } : null,
+              min: live != null ? { c: live, t: (yLast?.t ?? Date.now()) * 1e6 } : null,
               prevDay: { c: prev },
               preMarket: pre != null ? { p: pre } : null,
               postMarket: post != null ? { p: post } : null,
               marketState: state,
+              source: "yahoo-chart",
               todaysChange: live != null && prev != null ? live - prev : null,
               todaysChangePerc: live != null && prev ? ((live - prev) / prev) * 100 : null,
-              updated: Date.now() * 1e6,
+              updated: (yLast?.t ?? Date.now()) * 1e6,
             },
           });
         }
