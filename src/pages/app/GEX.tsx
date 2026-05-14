@@ -16,6 +16,7 @@ import { useComputeGEX } from "@/hooks/useComputeGEX";
 import { useComputeIVSurface } from "@/hooks/useComputeIVSurface";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import ChartHelp from "@/components/ChartHelp";
 
 function AIMarkdown({ text }: { text: string }) {
   return (
@@ -151,7 +152,26 @@ export default function GEX() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">GEX 分析</h1>
+          <h1 className="text-2xl font-semibold tracking-tight inline-flex items-center">
+            GEX 分析
+            <ChartHelp title="GEX 分析 vs 3D Greeks 有什么区别？">
+              <p>
+                <b>GEX 分析（本页）</b>聚焦市场结构：把所有合约的 Gamma×OI 加总到行权价上，
+                用来识别<b>做市商对冲压力</b>、<b>Pin 点</b>（Net GEX 最大正值的 strike）和
+                <b>Zero Gamma Level</b>（Net GEX 翻号位）。它回答的是
+                "<i>市场会被钉在哪里？什么时候从抑波切换到放大波动？</i>"。
+              </p>
+              <p>
+                <b>3D Greeks（另一页）</b>聚焦合约本身的<b>希腊字母曲面</b>：
+                Delta/Gamma/Vega/Theta 随 strike × 到期日的分布，以及 IV smile/skew。
+                它回答的是"<i>哪一张合约对价格 / 时间 / 波动率最敏感？</i>"。
+              </p>
+              <p>
+                简单记：<b>GEX = 全市场聚合视角</b>（做市商 dealer flow），
+                <b>3D Greeks = 单合约/曲面视角</b>（pricing & 暴露）。
+              </p>
+            </ChartHelp>
+          </h1>
           <p className="text-sm text-muted-foreground">Gamma Exposure 按行权价分布 · 识别 Pin 点与 Zero Gamma Level</p>
         </div>
         <div className="flex items-center gap-2">
@@ -212,7 +232,26 @@ export default function GEX() {
 
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <div className="flex items-baseline justify-between mb-2">
-          <h3 className="text-sm font-semibold">{metric === "gex" ? "Net GEX" : "未平仓量 OI"} · 按行权价</h3>
+          <h3 className="text-sm font-semibold inline-flex items-center">
+            {metric === "gex" ? "Net GEX" : "未平仓量 OI"} · 按行权价
+            <ChartHelp title={metric === "gex" ? "Net GEX · 按行权价 怎么读？" : "OI · 按行权价 怎么读？"}>
+              {metric === "gex" ? (
+                <>
+                  <p><b>横轴</b>：行权价 strike；<b>纵轴</b>：Net GEX（Call 在上为正、Put 在下为负），不同颜色代表不同到期日，叠加为该 strike 的总暴露。</p>
+                  <p><b>正 GEX 高峰 = Pin 磁铁</b>：做市商需要"逆势对冲"（涨了卖、跌了买），抑制波动，价格容易被吸附在该 strike 附近，尤其临近到期。</p>
+                  <p><b>负 GEX 高峰 = 加速器</b>：做市商需要"顺势对冲"（涨了买、跌了卖），放大波动，突破该 strike 后容易出现 gamma squeeze / 瀑布。</p>
+                  <p><b>红色虚线 Spot</b>：当前现价；<b>Zero γ</b>：Net GEX 由负转正的位置——价格在它<b>之上</b>通常波动收敛，<b>之下</b>波动放大。</p>
+                  <p><b>怎么用</b>：① 找最近的正 GEX 高峰当作短期目标 / 阻力支撑；② 关注 Spot 与 Zero γ 的相对位置判断"今天市场是抑波还是放大"；③ 临近 OPEX 看 Pin 风险。</p>
+                </>
+              ) : (
+                <>
+                  <p><b>横轴</b>：strike；<b>纵轴</b>：未平仓合约数 OI，Call 向上 / Put 向下，按到期日颜色叠加。</p>
+                  <p><b>大 Call OI 墙</b>通常被视为短期阻力（卖方需要在该位防守），<b>大 Put OI 墙</b>被视为支撑。</p>
+                  <p><b>怎么用</b>：① 把最高 OI 的 strike 作为关键 magnet / 支撑阻力；② 结合 Spot 看"墙在哪一侧"；③ 与 Net GEX 切换对比，验证"OI 墙"是否真的是 dealer 的对冲重心。</p>
+                </>
+              )}
+            </ChartHelp>
+          </h3>
           <span className="text-[11px] text-muted-foreground">Call 在上 / Put 在下 · 不同到期日颜色区分</span>
         </div>
         <div className="h-[640px]">
@@ -234,7 +273,24 @@ export default function GEX() {
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-base font-semibold">{metric === "gex" ? "Net GEX" : "OI"} · 按到期日</h2>
+            <h2 className="text-base font-semibold inline-flex items-center">
+              {metric === "gex" ? "Net GEX" : "OI"} · 按到期日
+              <ChartHelp title={metric === "gex" ? "Net GEX · 按到期日 怎么读？" : "OI · 按到期日 怎么读？"}>
+                {metric === "gex" ? (
+                  <>
+                    <p><b>横轴</b>：到期日；<b>纵轴</b>：该到期日的 Call/Put GEX 总和（Call 上 / Put 下）。</p>
+                    <p>用来看 <b>gamma 集中在哪一周</b>：临近的大 GEX 通常驱动短期 pin 行情；远月大 GEX 影响相对温和但代表结构性头寸。</p>
+                    <p><b>怎么用</b>：① 看哪一个到期日 GEX 占主导，OPEX 周往往是"重力周"；② Call/Put 不平衡可提示 dealer 偏向哪一边；③ 配合上图的 strike 维度做交叉定位。</p>
+                  </>
+                ) : (
+                  <>
+                    <p><b>横轴</b>：到期日；<b>纵轴</b>：该到期日的 Call/Put 总 OI。</p>
+                    <p>用来识别<b>持仓集中的到期周</b>（通常是月度 / 季度 OPEX），这些周容易出现 pin 行情和波动率压缩 / 释放。</p>
+                    <p><b>怎么用</b>：① 找 OI 最大的到期日作为重点观察日；② Put/Call 比偏高 → 偏空对冲集中；偏低 → 偏多 / call-heavy。</p>
+                  </>
+                )}
+              </ChartHelp>
+            </h2>
             <p className="text-xs text-muted-foreground">每个到期日 Call 在上 / Put 在下，颜色与上图一致</p>
           </div>
         </div>
