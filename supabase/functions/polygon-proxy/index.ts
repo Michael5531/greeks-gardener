@@ -316,34 +316,30 @@ Deno.serve(async (req) => {
       }
       case "stock-aggregates": {
         const { ticker, from, to, timespan = "day", multiplier = 1 } = body;
+        const canUseYahoo = (timespan === "day" && multiplier === 1) || (timespan === "minute" && multiplier === 5);
+        const fetchYahoo = async () => {
+          const interval = timespan === "minute" ? "5m" : "1d";
+          const period1 = Math.floor(new Date(from).getTime() / 1000);
+          const period2 = Math.floor(new Date(to).getTime() / 1000) + 86400;
+          const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=${interval}&includePrePost=true`;
+          const yKey = `yaggs2:${ticker}|${multiplier}|${timespan}|${from}|${to}`;
+          const yr = await cachedFetchJson(yKey, ttl, async () => {
+            const rr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+            const jj = await rr.json().catch(() => ({}));
+            return { data: jj, status: rr.status };
+          });
+          return yahooBarsFromChart(yr.data?.chart?.result?.[0]);
+        };
         const tgt = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/${multiplier}/${timespan}/${from}/${to}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
         const key = `aggs:${ticker}|${multiplier}|${timespan}|${from}|${to}`;
         const r = await cachedFetchJson(key, ttl, () => polygonFetchJson(tgt))
           .catch((e) => ({ data: { error: e instanceof Error ? e.message : String(e) }, status: 503 }));
         let results: any[] = Array.isArray(r.data?.results) ? r.data.results : [];
-        // Yahoo fallback for daily bars when Polygon returns empty / errors.
-        if (results.length === 0 && timespan === "day" && multiplier === 1) {
+        // Yahoo fallback for daily/YTD and intraday sparklines when Polygon is empty or partial.
+        if ((results.length === 0 || (timespan === "minute" && results.length < 8)) && canUseYahoo) {
           try {
-            const period1 = Math.floor(new Date(from).getTime() / 1000);
-            const period2 = Math.floor(new Date(to).getTime() / 1000) + 86400;
-            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1d&includePrePost=false`;
-            const yKey = `yaggs:${ticker}|${from}|${to}`;
-            const yr = await cachedFetchJson(yKey, ttl, async () => {
-              const rr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-              const jj = await rr.json().catch(() => ({}));
-              return { data: jj, status: rr.status };
-            });
-            const res0 = yr.data?.chart?.result?.[0];
-            const ts: number[] = res0?.timestamp ?? [];
-            const q = res0?.indicators?.quote?.[0] ?? {};
-            results = ts.map((t: number, i: number) => ({
-              t: t * 1000,
-              o: q.open?.[i] ?? null,
-              h: q.high?.[i] ?? null,
-              l: q.low?.[i] ?? null,
-              c: q.close?.[i] ?? null,
-              v: q.volume?.[i] ?? 0,
-            })).filter((b: any) => b.c != null);
+            const yBars = await fetchYahoo();
+            if (yBars.length > results.length) results = yBars;
           } catch (_) { /* leave empty */ }
         }
         return json({ status: "OK", results });
