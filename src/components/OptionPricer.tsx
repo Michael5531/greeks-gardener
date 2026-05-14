@@ -107,6 +107,42 @@ export default function OptionPricer({ externalTicker, externalSpot }: OptionPri
         <SliderField label={`${tx.pricerExt.timeDecay}: ${daysPassed} ${tx.pricerExt.days}`} value={daysPassed} min={0} max={Math.max(minDte - 1, 1)} step={1} onChange={setDaysPassed} />
       </div>
 
+      <div className="rounded-md border border-border bg-background/30 p-2.5 space-y-1.5">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <Label className="text-[11px] text-muted-foreground font-mono">
+            距 Last Trading Day · 剩余 {Math.max(minDte - daysPassed, 0)} 天 / 共 {minDte} 天
+          </Label>
+          <span className="text-[10px] text-muted-foreground font-mono">点击快速跳转</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { label: "今天 (T-" + minDte + ")", remain: minDte },
+            { label: "T-30", remain: 30 },
+            { label: "T-14", remain: 14 },
+            { label: "T-7", remain: 7 },
+            { label: "T-3", remain: 3 },
+            { label: "T-1", remain: 1 },
+            { label: "到期日 (T-0)", remain: 0 },
+          ]
+            .filter(p => p.remain <= minDte)
+            .map(p => {
+              const d = Math.min(Math.max(minDte - p.remain, 0), Math.max(minDte - 1, 1));
+              const active = d === daysPassed;
+              return (
+                <Button
+                  key={p.label}
+                  size="sm"
+                  variant={active ? "default" : "outline"}
+                  className="h-7 px-2 text-[11px] font-mono"
+                  onClick={() => setDaysPassed(d)}
+                >
+                  {p.label}
+                </Button>
+              );
+            })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Stat label={tx.pricerExt.cur} value={`$${fmt(pr?.currentValue ?? 0)}`} />
         <Stat label={tx.pricerExt.proj} value={`$${fmt(pr?.projectedValue ?? 0)}`} />
