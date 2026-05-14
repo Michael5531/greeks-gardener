@@ -17,13 +17,9 @@ export async function getCached(kind: string, key: string): Promise<any | null> 
   return { payload: data.payload, computed_at: data.computed_at, source: "cache" as const };
 }
 
-export async function setCached(kind: string, key: string, payload: any, ttlSec: number) {
-  const sb = admin();
-  const fresh_until = new Date(Date.now() + ttlSec * 1000).toISOString();
-  await sb.from("compute_cache").upsert(
-    { kind, cache_key: key, payload, fresh_until, computed_at: new Date().toISOString() },
-    { onConflict: "kind,cache_key" },
-  );
+export async function setCached(_kind: string, _key: string, _payload: any, _ttlSec: number) {
+  // Disabled: no longer persisting compute results to the database.
+  return;
 }
 
 /** Default TTLs (seconds) — gex/iv-surface/flow refresh fast intraday. */
