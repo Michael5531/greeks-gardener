@@ -12,7 +12,7 @@ export function useStockBars(ticker: string | null, from: string, to: string, ti
     setLoading(true);
     callPolygon<{ results?: Bar[] }>("stock-aggregates", { ticker, from, to, timespan, multiplier })
       .then(d => { if (!cancelled) setBars(d.results ?? []); })
-      .catch(() => { if (!cancelled) setBars([]); })
+      .catch(() => { /* keep the last visible chart instead of flashing blank */ })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [ticker, from, to, timespan, multiplier]);

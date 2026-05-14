@@ -100,6 +100,30 @@ function withApiKey(url: string, apiKey: string) {
   return u.toString();
 }
 
+function yahooSession(meta: any) {
+  const explicit = String(meta?.marketState || "").toUpperCase();
+  if (explicit) return explicit;
+  const now = Math.floor(Date.now() / 1000);
+  const p = meta?.currentTradingPeriod ?? {};
+  if (now >= p.pre?.start && now < p.pre?.end) return "PRE";
+  if (now >= p.regular?.start && now < p.regular?.end) return "REGULAR";
+  if (now >= p.post?.start && now < p.post?.end) return "POST";
+  return "CLOSED";
+}
+
+function yahooBarsFromChart(res0: any) {
+  const ts: number[] = res0?.timestamp ?? [];
+  const q = res0?.indicators?.quote?.[0] ?? {};
+  return ts.map((t: number, i: number) => ({
+    t: t * 1000,
+    o: q.open?.[i] ?? q.close?.[i] ?? null,
+    h: q.high?.[i] ?? q.close?.[i] ?? null,
+    l: q.low?.[i] ?? q.close?.[i] ?? null,
+    c: q.close?.[i] ?? null,
+    v: q.volume?.[i] ?? 0,
+  })).filter((b: any) => b.c != null);
+}
+
 async function optionQuoteDailyBars(optionTicker: string, from: string, to: string, apiKey: string, ttl: number, maxPages = 24) {
   const byDay = new Map<string, any>();
   let next = `${POLYGON_BASE}/v3/quotes/${encodeURIComponent(optionTicker)}?timestamp.gte=${isoToNs(from)}&timestamp.lte=${isoToNs(to, true)}&order=asc&limit=50000&sort=timestamp`;
@@ -173,12 +197,15 @@ Deno.serve(async (req) => {
         const cachedR = await cachedFetchJson(key, ttl, async () => {
           // 1) Try Yahoo first.
           let yMeta: any = null;
+          let yLast: any = null;
           try {
             const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1m&range=1d&includePrePost=true`;
             const yr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
             if (yr.ok) {
               const yj = await yr.json();
-              yMeta = yj?.chart?.result?.[0]?.meta ?? null;
+              const res0 = yj?.chart?.result?.[0] ?? null;
+              yMeta = res0?.meta ?? null;
+              yLast = yahooBarsFromChart(res0).at(-1) ?? null;
             }
           } catch (_) { /* ignore — fallback below */ }
 
@@ -192,34 +219,37 @@ Deno.serve(async (req) => {
               pPrev = pr.data?.results?.[0] ?? null;
             } catch (_) { /* ignore */ }
           }
-          return { data: { yMeta, pPrev }, status: 200 };
+          return { data: { yMeta, yLast, pPrev }, status: 200 };
         });
 
-        const { yMeta, pPrev } = cachedR.data;
+        const { yMeta, yLast, pPrev } = cachedR.data;
         if (yMeta) {
           const reg = yMeta.regularMarketPrice ?? null;
           const prev = yMeta.chartPreviousClose ?? yMeta.previousClose ?? null;
           const pre = yMeta.preMarketPrice ?? null;
           const post = yMeta.postMarketPrice ?? null;
-          const state = String(yMeta.marketState || "").toUpperCase();
+          const state = yahooSession(yMeta);
+          const last = yLast?.c ?? null;
           // Pick the most relevant live price for the current session.
-          const live = state === "PRE" && pre != null ? pre
-            : (state === "POST" || state === "POSTPOST" || state === "CLOSED") && post != null ? post
-            : reg ?? post ?? pre ?? prev;
+          const live = state === "PRE" ? (pre ?? last ?? reg)
+            : (state === "POST" || state === "POSTPOST") ? (post ?? last ?? reg)
+            : state === "REGULAR" ? (last ?? reg)
+            : (post ?? last ?? reg ?? pre ?? prev);
           return json({
             status: "OK",
             ticker: {
               ticker: sym,
-              lastTrade: live != null ? { p: live, t: Date.now() * 1e6 } : null,
+              lastTrade: live != null ? { p: live, t: (yLast?.t ?? Date.now()) * 1e6 } : null,
               day: { c: reg ?? live },
-              min: live != null ? { c: live, t: Date.now() * 1e6 } : null,
+              min: live != null ? { c: live, t: (yLast?.t ?? Date.now()) * 1e6 } : null,
               prevDay: { c: prev },
               preMarket: pre != null ? { p: pre } : null,
               postMarket: post != null ? { p: post } : null,
               marketState: state,
+              source: "yahoo-chart",
               todaysChange: live != null && prev != null ? live - prev : null,
               todaysChangePerc: live != null && prev ? ((live - prev) / prev) * 100 : null,
-              updated: Date.now() * 1e6,
+              updated: (yLast?.t ?? Date.now()) * 1e6,
             },
           });
         }
@@ -286,34 +316,30 @@ Deno.serve(async (req) => {
       }
       case "stock-aggregates": {
         const { ticker, from, to, timespan = "day", multiplier = 1 } = body;
+        const canUseYahoo = (timespan === "day" && multiplier === 1) || (timespan === "minute" && multiplier === 5);
+        const fetchYahoo = async () => {
+          const interval = timespan === "minute" ? "5m" : "1d";
+          const period1 = Math.floor(new Date(from).getTime() / 1000);
+          const period2 = Math.floor(new Date(to).getTime() / 1000) + 86400;
+          const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=${interval}&includePrePost=true`;
+          const yKey = `yaggs2:${ticker}|${multiplier}|${timespan}|${from}|${to}`;
+          const yr = await cachedFetchJson(yKey, ttl, async () => {
+            const rr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+            const jj = await rr.json().catch(() => ({}));
+            return { data: jj, status: rr.status };
+          });
+          return yahooBarsFromChart(yr.data?.chart?.result?.[0]);
+        };
         const tgt = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/${multiplier}/${timespan}/${from}/${to}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
         const key = `aggs:${ticker}|${multiplier}|${timespan}|${from}|${to}`;
         const r = await cachedFetchJson(key, ttl, () => polygonFetchJson(tgt))
           .catch((e) => ({ data: { error: e instanceof Error ? e.message : String(e) }, status: 503 }));
         let results: any[] = Array.isArray(r.data?.results) ? r.data.results : [];
-        // Yahoo fallback for daily bars when Polygon returns empty / errors.
-        if (results.length === 0 && timespan === "day" && multiplier === 1) {
+        // Yahoo fallback for daily/YTD and intraday sparklines when Polygon is empty or partial.
+        if ((results.length === 0 || (timespan === "minute" && results.length < 8)) && canUseYahoo) {
           try {
-            const period1 = Math.floor(new Date(from).getTime() / 1000);
-            const period2 = Math.floor(new Date(to).getTime() / 1000) + 86400;
-            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1d&includePrePost=false`;
-            const yKey = `yaggs:${ticker}|${from}|${to}`;
-            const yr = await cachedFetchJson(yKey, ttl, async () => {
-              const rr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-              const jj = await rr.json().catch(() => ({}));
-              return { data: jj, status: rr.status };
-            });
-            const res0 = yr.data?.chart?.result?.[0];
-            const ts: number[] = res0?.timestamp ?? [];
-            const q = res0?.indicators?.quote?.[0] ?? {};
-            results = ts.map((t: number, i: number) => ({
-              t: t * 1000,
-              o: q.open?.[i] ?? null,
-              h: q.high?.[i] ?? null,
-              l: q.low?.[i] ?? null,
-              c: q.close?.[i] ?? null,
-              v: q.volume?.[i] ?? 0,
-            })).filter((b: any) => b.c != null);
+            const yBars = await fetchYahoo();
+            if (yBars.length > results.length) results = yBars;
           } catch (_) { /* leave empty */ }
         }
         return json({ status: "OK", results });
