@@ -289,7 +289,10 @@ Deno.serve(async (req) => {
 
     params.set("apiKey", apiKey);
     const target = `${POLYGON_BASE}${endpoint}?${params.toString()}`;
-    const r = await cachedFetchJson(target, ttl, () => polygonFetchJson(target));
+    const r = await cachedFetchJson(target, ttl, () => polygonFetchJson(target)).catch((e) => ({
+      data: { error: e instanceof Error ? e.message : String(e) },
+      status: 503,
+    }));
     if (r.status >= 400) return json(fallbackPayload(action, r.data, r.status), 200);
     return json(r.data, r.status);
   } catch (e) {
