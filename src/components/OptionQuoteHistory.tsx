@@ -115,9 +115,14 @@ export default function OptionQuoteHistory({
   useEffect(() => {
     if (!open || !optionTicker) return;
     loadIntraday();
+    /* eslint-disable-next-line */
+  }, [open, optionTicker, date, underlying]);
+
+  useEffect(() => {
+    if (!open || !optionTicker || !underlying) return;
     loadHistory();
     /* eslint-disable-next-line */
-  }, [open, optionTicker, date, historyRange]);
+  }, [open, optionTicker, underlying, historyRange]);
 
   // Down-sample to ~600 points by binning timestamps for snappy charting.
   const chartData = useMemo(() => {
