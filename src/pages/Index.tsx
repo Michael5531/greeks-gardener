@@ -104,13 +104,13 @@ export default function Index() {
       </header>
 
       {/* Live tape */}
-      <div id="tape" className="relative z-10 border-y border-border/60 bg-card/30 backdrop-blur overflow-hidden">
-        <div className="flex gap-10 py-2.5 animate-[scroll_40s_linear_infinite] whitespace-nowrap font-mono text-xs">
+      <div id="tape" className="relative z-10 border-y border-border bg-card/60 backdrop-blur overflow-hidden">
+        <div className="flex gap-10 py-3 animate-[scroll_40s_linear_infinite] whitespace-nowrap font-mono text-[13px]">
           {[...tape, ...tape, ...tape].map((t, i) => (
             <span key={i} className="flex items-center gap-2 shrink-0">
-              <span className="text-muted-foreground">{t.s}</span>
-              <span className="tabular-nums">{t.p.toFixed(2)}</span>
-              <span className={t.c >= 0 ? "text-bull" : "text-bear"}>
+              <span className="text-foreground/60 font-semibold tracking-wider">{t.s}</span>
+              <span className="tabular-nums text-foreground/90">{t.p.toFixed(2)}</span>
+              <span className={`tabular-nums font-medium ${t.c >= 0 ? "text-bull" : "text-bear"}`}>
                 {t.c >= 0 ? "▲" : "▼"} {Math.abs(t.c).toFixed(2)}%
               </span>
             </span>
@@ -128,9 +128,16 @@ export default function Index() {
               {t.home.livePill}
             </div>
             <h1 className="text-[clamp(2.75rem,8vw,7.5rem)] font-bold tracking-[-0.04em] leading-[0.92]">
-              {t.home.heroPre} <em className="not-italic bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-primary)" }}>{t.home.heroEm}</em>
-              <br/>
-              <span className="text-muted-foreground/70">{t.home.heroPost}</span> {t.home.heroPostBefore}{t.home.heroPostEnd}
+              <span className="block">
+                {t.home.heroPre}{" "}
+                <em
+                  className="not-italic bg-clip-text text-transparent"
+                  style={{ backgroundImage: "linear-gradient(135deg, hsl(165 90% 55%), hsl(280 85% 70%))" }}
+                >
+                  {t.home.heroEm}
+                </em>
+              </span>
+              <span className="block">{t.home.heroPost}{" "}{t.home.heroPostBefore}{t.home.heroPostEnd}</span>
             </h1>
             <p className="mt-8 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
               {t.home.heroBody}
@@ -245,7 +252,7 @@ export default function Index() {
         <div id="stats" className="mt-24 grid grid-cols-2 md:grid-cols-4 border-y border-border">
           {stats.map((s, i) => (
             <div key={s.l} className={`py-7 px-2 ${i !== 0 ? "md:border-l border-border" : ""} ${i === 1 ? "border-l border-border" : ""} ${i === 2 ? "md:border-l border-l-0 border-t md:border-t-0 border-border" : ""} ${i === 3 ? "border-t md:border-t-0 border-l border-border" : ""}`}>
-              <div className="text-3xl md:text-5xl font-bold tracking-tight tabular-nums">{s.v}</div>
+              <div className="font-mono text-3xl md:text-5xl font-semibold tracking-tight tabular-nums">{s.v}</div>
               <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground mt-2">{s.l}</div>
             </div>
           ))}

@@ -1,97 +1,79 @@
-## 问题诊断
+以一名专业 UI/UX 设计师视角，对当前 OPTI-X 落地页做一次评审，并给出按优先级排序的改进项。整体方向是好的——深色金融终端 + 青绿 / 紫的双色调、Space Grotesk 大字标题、模块化栅格——已经具备 Bloomberg / Linear 那种"专业冷感"。但还有几处会拉低专业感与转化率的问题。
 
-当前 `Backtest.tsx` + `run-backtest` edge function 存在的真实问题：
+## 一、最影响第一印象的问题（P0）
 
-1. **Underlying 价格不准/对不上**
-   - Polygon aggregates 用 `adjusted=true`，会被股息/拆股回填，跟用户在期权链/Dashboard 看到的实时价格存在偏差。
-   - 回测结果只画 `equity_curve`（cash），从没把 underlying 同期 K 线/收盘价画出来，用户没法对照。
-   - 时间戳用 `new Date(bar.t).toISOString().slice(0,10)`，UTC 截断，美东收盘日有时会偏一天。
+1. Hero 排版断行不自然
+   - "看见 市场 / 在它 出手前。" 现在的换行让 "在它" 单独成行、视觉上像孤字，破坏了节奏。
+   - 建议：调整为「看见市场 / 在它出手前。」两行结构，"市场" 用青绿描边或渐变高亮；或用一行 + 副标语形式。中文标题不应像英文那样按词换行。
 
-2. **PnL 计算可疑**
-   - 持仓期间 `cash` 不动，`equity.push({date, value: cash})` 是平的，只在平仓那天跳一次 → 曲线"阶梯化"不像真实 MTM。
-   - profit_take / stop_loss 对 credit 策略的判定写得绕，容易误触发。
+2. Hero 与右侧 mock chart 信息密度失衡
+   - 左边大字标题 + 一段长说明 + 两个按钮，右边一个迷你 GEX 卡片，留白巨大但缺乏"产品力证据"。
+   - 建议：把右侧 mock 卡片做成可轮播的 3 张（GEX / 3D Greeks / Order Flow），每 4s 切换；或直接嵌入一个真实的 live 微型终端预览，立刻传达"这是一个工具，不是营销页"。
 
-3. **缺少用户期望的输入**
-   - 没有"假设买入时间点 / 买入价格"
-   - 没有 BS 未来定价的完整模型参数（r、σ、q 股息、未来 IV 路径）
-   - 没法看单笔合约从买入到到期的 option price / Greeks 演化
+3. 顶部 Ticker Tape 颜色过暗
+   - 当前 ticker 行几乎与背景同色，对比度不足（WCAG AA 不达标），让"实时数据"这个卖点反而被弱化。
+   - 建议：行高 +4px，文字提亮到 foreground/80，涨跌色用 bull/bear token 的 saturated 版本，整条加 1px 顶/底 border 与背景区隔。
+
+## 二、信息架构与转化（P1）
+
+4. 缺少"它解决什么问题"的钩子
+   - 现在直接跳到模块罗列。专业交易员需要先看到 "为什么我需要这个" 的对比叙事（vs Tradingview / vs 看券商软件）。
+   - 建议：在 Hero 之后、模块之前加一段 "Before / After" 或 "传统 vs OPTI-X" 的对比块。
+
+5. 8K+ / 1M+ / <120ms / 24/7 这组数字太"营销化"且无上下文
+   - 数字之间无视觉层级、无图标、无 tooltip 说明来源，会被专业用户视为水分。
+   - 建议：每个数字加一个 16px 单色图标 + 一行 "source: Polygon.io" 之类的脚注；或干脆把这块换成实时滚动的"今日已处理合约数"等动态数字（更有说服力）。
+
+6. 6 个模块卡片同质化严重
+   - 6 张卡布局、字号、留白完全相同，眼睛没有落点，扫读时无法快速分辨主次。
+   - 建议：采用 Bento 网格——把 "3D Greeks" 和 "GEX 微观结构" 做成 2x 大卡（带小预览图/动画），其余 4 个保持当前小卡尺寸。同时给每张卡加 hover 时的 micro-preview。
+
+7. CTA 重复且层级模糊
+   - 顶部右上、Hero、底部都是 "进入终端"，但视觉权重几乎一致；"开始使用" 与 "进入终端" 文案不统一。
+   - 建议：统一为 "进入终端 →"，并明确主 CTA（Hero + 底 banner 用 filled primary）vs 次 CTA（导航用 ghost）。
+
+## 三、视觉细节（P2）
+
+8. 全站只有一个青绿强调色，紫色 accent 几乎没用上
+   - index.css 里定义了 --accent: 280 85% 65%，但页面上只在底部 banner 背景出现一次，浪费了双色系统。
+   - 建议：在 Hero "市场" 二字、模块编号 06、数字 stats 上引入紫→青的渐变，让品牌色系真正成立。
+
+9. 字体层级偏单一
+   - 所有正文都用 Space Grotesk；数字本应是 JetBrains Mono（项目已定义 --font-mono），但 hero 下方的 8K+ / 1M+ 看起来仍是 display 字体。
+   - 建议：所有数值（含 ticker、stats、模块编号 01-06）强制走 font-mono + tabular-nums，立刻拉出"终端感"。
+
+10. 模块卡缺少 hover 反馈
+    - 现在悬停几乎无变化，对一个声称"专业终端"的产品而言显得静态。
+    - 建议：hover 时 border 渐变到 primary、轻微 translateY(-2px)、右上角箭头滑入。
+
+11. 底部 "把直觉，升级为系统" banner 的紫色渐变与上方风格脱节
+    - 是整页唯一的紫色大色块，突兀。
+    - 建议：保留渐变但降低饱和度 30%，并在卡内加一条细的网格线纹理（grid-bg utility 已有），与整体终端语言统一。
+
+12. Footer 信息太薄
+    - 只有版权和两行免责声明，缺少导航复用、社媒、状态页、文档入口。
+    - 建议：3 列 footer：产品 / 公司 / 法务 + 一行 "System status · API · Docs"。
+
+## 四、可访问性与响应式（P2）
+
+13. 中英文切换按钮 "中文 / EN" 视觉是两个独立按钮，但其实是单选——应使用 segmented control 形式（已选项有 background 高亮）。
+14. Hero 大字 (~120px) 在 768-1024 区间会溢出，需要 clamp(48px, 8vw, 120px)。
+15. ticker tape 在移动端是横向 scroll 还是省略？需要确认无横向溢出。
+16. 全站缺少 prefers-reduced-motion 处理（如果加入轮播 / 动画后要补）。
+
+## 五、SEO / Meta（P3）
+
+17. 检查 index.html 的 title / description / og:image 是否针对落地页做了优化；目前的 hero "看见市场，在它出手前" 是绝佳 tagline，应同步进 meta。
 
 ---
 
-## 方案
+## 建议落地顺序
 
-### A. 后端 `run-backtest` 重写（保持向后兼容，新增 `mode`）
-
-新增 `mode: "single_trade"`（默认仍是旧的 `"strategy_loop"`，保留历史回测列表能继续显示）：
-
-入参（single_trade）：
-```ts
-{
-  mode: "single_trade",
-  ticker, entry_date,                // 必填
-  entry_spot_override?: number,      // 可选，留空则用 entry_date 当日 close
-  legs: [{ type, side, strike, expiration, qty, entry_premium? }],
-  bs: { r: number, q: number, iv: number, iv_path?: "constant"|"realized" },
-  end_date?: string,                 // 默认 = 最远到期日
-}
+```text
+Sprint 1 (P0, ~半天)    : #1 Hero 排版 + #3 ticker 对比度 + #9 数字字体 mono
+Sprint 2 (P1, ~1天)     : #6 Bento 模块卡 + #5 stats 重做 + #7 CTA 统一
+Sprint 3 (P1-P2, ~1天)  : #2 Hero 右侧轮播 + #8 紫色 accent 引入 + #10 hover 动效
+Sprint 4 (P2-P3)        : #4 对比叙事段 + #11 banner 调色 + #12 footer 扩展 + #13-17
 ```
 
-执行：
-1. 拉 Polygon `aggs/.../range/1/day/{entry_date}/{end_date}` **`adjusted=false`**（原始价，与盘面一致），按 `America/New_York` 把 `t` → 交易日字符串，避免时区漂移。
-2. 入场：`S0 = entry_spot_override ?? bars[0].c`；每条 leg 若没传 `entry_premium`，用 BS(`S0, K, T0, r, iv, type`) 自动算。
-3. 每日循环：
-   - `T = max((expiry - bar_date)/365, 1/365)`
-   - 每条 leg 计算 BS price + Greeks（Δ Γ Θ Vega）
-   - 组合 MTM = Σ side_sign × (now_premium − entry_premium) × qty × 100
-   - 输出每日 `{date, spot, leg_prices[], net_premium, pnl, delta, gamma, theta, vega}`
-4. 到期日：内在价值收敛；之后不再产生数据点。
-5. 不写 `backtests` 表（这是 what-if，不污染历史回测列表），直接把结果回给前端。
-
-**Underlying 准确性的修复同时下沉到旧的 strategy_loop 路径**：`adjusted=false` + 纽约时区日历。
-
-### B. 前端 `Backtest.tsx`
-
-在策略选择栏旁加一个 Tab：
-- `策略循环回测`（现有功能，修过 underlying 准确性）
-- `单笔合约推演`（新增，对应 single_trade）
-
-单笔推演面板字段：
-- 标的（沿用全局选中）
-- 假设买入日期（DatePicker，默认 30 天前最近交易日）
-- 买入价（可选，留空=当日收盘；显示当日 close 作为 placeholder）
-- Legs builder：复用 `OptionLegsBuilder`（已有 type/side/strike/expiration/qty/iv）
-- BS 参数：r（默认 0.045）、q（默认 0）、IV（默认取 leg 自身 IV）、未来 IV 路径（恒定/已实现波动率，先实现"恒定"，realized 留 TODO）
-- 推演结束日期（默认 = 最远到期）
-
-结果区：
-- 顶部 KPI：当前 PnL、最大盈亏、距到期天数、净 Δ/Γ/Θ/Vega
-- 主图：双 Y 轴线图 — 左轴 Option 组合 MTM（$），右轴 Underlying 收盘价（同区间，原始价）
-- 副图：Greeks 演化（4 条线）
-- 表格：每日明细可下载（前端 CSV 导出）
-
-### C. 字符串/i18n 与一致性
-
-- `pricerExt` 里加几个新 key（entryDate / entryPrice / bsParams / divYield / forwardIv / singleTrade）
-- 同步 `zh.ts` + `en.ts`
-
----
-
-## 技术要点
-
-- **时区**：用 `Intl.DateTimeFormat('en-US', {timeZone:'America/New_York', ...})` 把 epoch ms 转日期字符串，确保跟期权链、Polygon 显示日历一致。
-- **adjusted=false**：保持与用户在 Chain/Dashboard 看到的 last trade 一致。BS 估值不需要复权价。
-- **缓存**：single_trade 不进 cache（输入空间太大、等价于即时计算），strategy_loop 维持现状。
-- **不动数据库**：不需要新表/迁移；`backtests` 表保留给策略循环回测。
-- **多腿 Greeks**：long sign=+1，short sign=-1，组合 Greek = Σ sign × greek × qty。
-
----
-
-## 文件改动清单
-
-- `supabase/functions/run-backtest/index.ts` — 新增 `mode` 分支 + single_trade 实现 + adjusted=false + NY 时区日历
-- `src/pages/app/Backtest.tsx` — 顶部 Tabs，新增 `<SingleTradeSim />` 子组件
-- `src/components/SingleTradeSim.tsx` — 新组件（输入面板 + 双轴主图 + Greeks 副图 + 明细表）
-- `src/i18n/zh.ts`、`src/i18n/en.ts` — 文案
-- 不新建表，不改 RLS
-
-完成后用 `curl_edge_functions` 跑一次 single_trade 验证返回结构，再在前端核对图表对齐。
+如果你认可这个方向，我可以从 Sprint 1 开始落地——也可以告诉我你最想先动哪一块，或者希望我先就 Hero 出 2-3 套视觉方案给你挑。
