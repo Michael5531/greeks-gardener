@@ -6,7 +6,7 @@ const en: Dict = {
     livePill: "Polygon.io · Live Options Tape",
     heroPre: "See the", heroEm: "market", heroPost: "before", heroPostBefore: "it moves", heroPostEnd: ".",
     heroBody: "OPTI-X decomposes the entire US options chain into 3D Greeks, GEX microstructure, and actionable strategy signals — a market-intelligence terminal built for systematic traders.",
-    cta: "Get started", explore: "Explore modules",
+    cta: "Enter terminal", explore: "Explore modules",
     cardTag: "0DTE · GEX",
     stats: { tickers: "US tickers", contracts: "Live contracts", latency: "End-to-end latency", uptime: "Stream uptime" },
     sectionTag: "06 Modules",
