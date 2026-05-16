@@ -100,32 +100,35 @@ export default function MarketStatusBar() {
   }
 
   return (
-    <div className="sticky top-0 z-40 px-3 pt-3">
-      <div className="rounded-lg border border-border bg-card/70 backdrop-blur shadow-lg shadow-background/40 supports-[backdrop-filter]:bg-card/50">
-        <div className="flex items-center gap-3 px-3 h-10 text-xs font-mono overflow-x-auto">
+    <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
+      <div className="px-6">
+        <div className="flex items-center gap-4 h-11 text-[11px] font-mono overflow-x-auto">
           <button
             onClick={handleRefresh}
             title={t.market.refresh}
-            className="inline-flex items-center justify-center h-6 w-6 rounded border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            className="inline-flex items-center justify-center h-6 w-6 text-muted-foreground hover:text-foreground transition-colors shrink-0"
           >
             <RefreshCw className={cn("h-3 w-3", spin && "animate-spin")} />
           </button>
 
-          <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded border shrink-0", sessionTone[session])}>
-            <span className={cn("h-1.5 w-1.5 rounded-full", session === "regular" ? "bg-bull animate-pulse" : "bg-current opacity-70")} />
+          <div className={cn(
+            "inline-flex items-center gap-1.5 shrink-0 uppercase tracking-[0.18em] text-[10px]",
+            session === "regular" ? "text-bull" : session === "closed" ? "text-muted-foreground" : "text-primary",
+          )}>
+            <span className={cn("h-1 w-1 rounded-full bg-current", session === "regular" && "animate-pulse")} />
             {sessionLabel[session]}
           </div>
 
-          <div className="text-muted-foreground shrink-0">
-            <span className="opacity-60 mr-1">{countdown.label}</span>
+          <div className="text-muted-foreground shrink-0 flex items-baseline gap-1.5">
+            <span className="font-serif-display italic text-xs opacity-80">{countdown.label}</span>
             <span className="tabular-nums text-foreground">{countdown.text}</span>
           </div>
 
-          <div className="h-4 w-px bg-border shrink-0" />
+          <div className="h-3 w-px bg-border shrink-0" />
 
           {ticker ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="text-muted-foreground">{ticker}</div>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="text-foreground font-semibold tracking-wider">{ticker}</div>
               <div
                 className={cn(
                   "tabular-nums transition-colors",
@@ -138,25 +141,25 @@ export default function MarketStatusBar() {
               {(session === "pre" || session === "after") && quote?.price != null && (
                 <span
                   title={t.market.extTip}
-                  className="px-1 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent text-[9px] uppercase tracking-wider"
+                  className="text-primary text-[9px] uppercase tracking-[0.2em]"
                 >
                   {t.market.ext}
                 </span>
               )}
               {quote?.change != null && (
-                <div className={cn("tabular-nums text-[11px]", quote.change >= 0 ? "text-bull" : "text-bear")}>
+                <div className={cn("tabular-nums text-[10px]", quote.change >= 0 ? "text-bull" : "text-bear")}>
                   {quote.change >= 0 ? "+" : ""}{quote.change.toFixed(2)} ({quote.changePct != null ? (quote.changePct * 100).toFixed(2) : "0.00"}%)
                 </div>
               )}
-              <Activity className="h-3 w-3 text-muted-foreground" />
+              <Activity className="h-2.5 w-2.5 text-muted-foreground" />
             </div>
           ) : (
-            <div className="text-muted-foreground shrink-0">{t.market.noTicker}</div>
+            <div className="text-muted-foreground shrink-0 font-serif-display italic text-xs">{t.market.noTicker}</div>
           )}
 
-          <div className="ml-auto flex items-center gap-3 shrink-0">
-            <div className="text-muted-foreground">ET <span className="text-foreground tabular-nums">{etTime}</span></div>
-            <div className="text-muted-foreground hidden sm:block">LOCAL <span className="text-foreground tabular-nums">{localTime}</span></div>
+          <div className="ml-auto flex items-center gap-4 shrink-0">
+            <div className="text-muted-foreground uppercase tracking-[0.2em] text-[10px]">ET <span className="text-foreground tabular-nums ml-1">{etTime}</span></div>
+            <div className="text-muted-foreground uppercase tracking-[0.2em] text-[10px] hidden sm:block">LOCAL <span className="text-foreground tabular-nums ml-1">{localTime}</span></div>
             <LanguageSwitcher />
           </div>
         </div>

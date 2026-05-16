@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
-  Activity, BarChart3, Boxes, History, Home, Layers, LayoutDashboard,
+  Activity, BarChart3, Boxes, History, Layers, LayoutDashboard,
   LineChart, LogOut, Radar, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -65,65 +65,56 @@ export default function AppLayout() {
       <aside
         className={cn(
           "hidden md:flex md:flex-col md:min-h-screen md:sticky md:top-0",
-          "border-r border-border bg-card/40 backdrop-blur supports-[backdrop-filter]:bg-card/30",
+          "border-r border-border bg-background",
           "transition-[width] duration-200 ease-out shrink-0",
-          collapsed ? "md:w-[68px]" : "md:w-60",
+          collapsed ? "md:w-[72px]" : "md:w-[260px]",
         )}
       >
         {/* Brand */}
-        <div className="px-3 py-4 border-b border-border">
+        <div className={cn("px-5 py-6 border-b border-border", collapsed && "px-3")}>
           <Link
             to="/"
             className={cn(
-              "group flex items-center gap-3 rounded-lg p-1.5 hover:bg-secondary/60 transition-colors",
+              "group flex items-baseline gap-2 transition-opacity hover:opacity-70",
               collapsed && "justify-center",
             )}
             title={t.brand.backHome}
           >
-            <div className="relative h-9 w-9 shrink-0">
-              <div className="absolute inset-0 rounded-lg blur-md opacity-50 group-hover:opacity-90 transition-opacity"
-                style={{ background: "var(--gradient-primary)" }} />
-              <div className="relative h-9 w-9 rounded-lg border border-border/80 bg-background/80 backdrop-blur grid place-items-center overflow-hidden">
-                <div className="absolute inset-0 opacity-30"
-                  style={{ background: "linear-gradient(135deg, hsl(43 70% 50% / 0.5), transparent 50%, hsl(43 80% 70% / 0.4))" }} />
-                <svg viewBox="0 0 32 32" style={{ height: 18, width: 18 }} className="relative">
-                  <defs>
-                    <linearGradient id="al-stroke" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="hsl(43 75% 60%)" />
-                      <stop offset="100%" stopColor="hsl(43 85% 78%)" />
-                    </linearGradient>
-                  </defs>
-                  <path d="M3 26 L13 14 L19 20 L29 6" fill="none" stroke="url(#al-stroke)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="13" cy="14" r="1.6" fill="hsl(43 75% 60%)" />
-                  <circle cx="19" cy="20" r="1.6" fill="hsl(43 85% 78%)" />
-                </svg>
-              </div>
-            </div>
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold tracking-[-0.02em] leading-none text-[14px]">
-                  OPTI<span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-primary)" }}>·X</span>
-                </div>
-                <div className="text-[9px] text-muted-foreground font-mono mt-1 tracking-[0.2em]">OPTIONS · v0.1</div>
-              </div>
-            )}
-            {!collapsed && (
-              <Home className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            {collapsed ? (
+              <span className="font-serif-display italic text-2xl text-primary">O</span>
+            ) : (
+              <>
+                <span className="font-serif-display italic text-[28px] leading-none text-foreground">
+                  Opti<span className="text-primary">·x</span>
+                </span>
+                <span className="ml-auto editorial-eyebrow">№01</span>
+              </>
             )}
           </Link>
+          {!collapsed && (
+            <div className="mt-2 text-[10px] font-mono uppercase tracking-[0.28em] text-muted-foreground">
+              The Options Quarterly
+            </div>
+          )}
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3">
-          {groups.map((g) => (
-            <div key={g.label} className="mb-4">
+        <nav className="flex-1 overflow-y-auto py-5">
+          {groups.map((g, gi) => (
+            <div key={g.label} className="mb-6">
               {!collapsed && (
-                <div className="px-5 pb-1.5 text-[10px] font-mono uppercase tracking-[0.22em] text-muted-foreground/70">
-                  {g.label}
+                <div className="px-5 pb-3 flex items-baseline gap-3">
+                  <span className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">
+                    0{gi + 1}
+                  </span>
+                  <span className="font-serif-display italic text-base text-foreground">
+                    {g.label}
+                  </span>
+                  <span className="flex-1 border-b border-border" />
                 </div>
               )}
-              <div className="px-2 space-y-0.5">
-                {g.items.map((n) => (
+              <div className={cn("space-y-0", collapsed ? "px-2" : "px-3")}>
+                {g.items.map((n, ni) => (
                   <NavLink
                     key={n.to}
                     to={n.to}
@@ -131,25 +122,36 @@ export default function AppLayout() {
                     title={collapsed ? n.label : undefined}
                     className={({ isActive }) =>
                       cn(
-                        "relative flex items-center gap-3 px-2.5 py-2 rounded-md text-sm transition-colors",
+                        "group/nav relative flex items-center gap-3 px-2 py-2 text-[13px] transition-colors",
                         collapsed && "justify-center",
                         isActive
-                          ? "bg-secondary/70 text-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
                       )
                     }
                   >
                     {({ isActive }) => (
                       <>
-                        {isActive && (
-                          <span
-                            className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full"
-                            style={{ background: "var(--gradient-primary)" }}
-                            aria-hidden
-                          />
+                        {!collapsed && (
+                          <span className={cn(
+                            "font-mono text-[10px] tabular-nums w-5",
+                            isActive ? "text-primary" : "text-muted-foreground/50",
+                          )}>
+                            {String(ni + 1).padStart(2, "0")}
+                          </span>
                         )}
-                        <n.icon className={cn("h-4 w-4 shrink-0", isActive && "text-primary")} />
-                        {!collapsed && <span className="truncate">{n.label}</span>}
+                        <n.icon className={cn("h-3.5 w-3.5 shrink-0", isActive && "text-primary")} />
+                        {!collapsed && (
+                          <span className={cn(
+                            "truncate font-serif-display text-[17px]",
+                            isActive && "italic",
+                          )}>
+                            {n.label}
+                          </span>
+                        )}
+                        {!collapsed && isActive && (
+                          <span className="ml-auto text-primary text-base font-serif-display">→</span>
+                        )}
                       </>
                     )}
                   </NavLink>
@@ -160,33 +162,36 @@ export default function AppLayout() {
         </nav>
 
         {/* Footer: collapse + user */}
-        <div className="border-t border-border p-2 space-y-1">
+        <div className="border-t border-border p-3 space-y-2">
           <div className={cn("flex items-center gap-1", collapsed ? "flex-col" : "")}>
           <button
             type="button"
             onClick={() => setCollapsed(c => !c)}
             className={cn(
-              "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors",
+              "flex-1 flex items-center gap-2 px-2 py-1.5 text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors",
               collapsed && "justify-center",
             )}
             title={collapsed ? "Expand" : "Collapse"}
           >
-            {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+            {collapsed ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
             {!collapsed && <span>Collapse</span>}
           </button>
           <ThemeToggle />
           </div>
           {!collapsed && user?.email && (
-            <div className="px-2.5 pt-1 text-[10px] text-muted-foreground truncate font-mono">{user.email}</div>
+            <div className="px-2 pt-1 text-[10px] text-muted-foreground truncate font-mono">{user.email}</div>
           )}
           <Button
             variant="ghost"
             size="sm"
-            className={cn("w-full gap-2", collapsed ? "justify-center px-0" : "justify-start")}
+            className={cn(
+              "w-full gap-2 font-mono text-[11px] uppercase tracking-[0.2em] h-8",
+              collapsed ? "justify-center px-0" : "justify-start",
+            )}
             onClick={async () => { await signOut(); navigate("/auth"); }}
             title={collapsed ? t.nav.logout : undefined}
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-3.5 w-3.5" />
             {!collapsed && t.nav.logout}
           </Button>
         </div>
