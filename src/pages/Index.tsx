@@ -129,7 +129,7 @@ export default function Index() {
             </div>
             <h1 className="text-[clamp(2.75rem,8vw,7.5rem)] font-bold tracking-[-0.04em] leading-[0.92]">
               <span className="block">
-                {t.home.heroPre}
+                {t.home.heroPre}{" "}
                 <em
                   className="not-italic bg-clip-text text-transparent"
                   style={{ backgroundImage: "linear-gradient(135deg, hsl(165 90% 55%), hsl(280 85% 70%))" }}
@@ -137,7 +137,7 @@ export default function Index() {
                   {t.home.heroEm}
                 </em>
               </span>
-              <span className="block">{t.home.heroPost}{t.home.heroPostBefore}{t.home.heroPostEnd}</span>
+              <span className="block">{t.home.heroPost}{" "}{t.home.heroPostBefore}{t.home.heroPostEnd}</span>
             </h1>
             <p className="mt-8 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
               {t.home.heroBody}
