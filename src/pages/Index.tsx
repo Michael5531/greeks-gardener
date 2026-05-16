@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Activity, BarChart3, LineChart, TrendingUp, Boxes, Radar,
   ArrowUpRight, ArrowDownRight, Zap, Layers, Sparkles, ArrowRight, ShieldCheck,
+  Database, Gauge, Clock, Infinity as InfinityIcon,
 } from "lucide-react";
 import { useT } from "@/i18n";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -62,10 +63,10 @@ const GEX_DATA: Record<string, { spot: number; zeroG: number; strikes: { k: numb
 export default function Index() {
   const t = useT();
   const stats = [
-    { v: "8K+",   l: t.home.stats.tickers },
-    { v: "1M+",   l: t.home.stats.contracts },
-    { v: "<120ms",l: t.home.stats.latency },
-    { v: "24/7",  l: t.home.stats.uptime },
+    { v: "8K+",    l: t.home.stats.tickers,   icon: Database, src: "Polygon.io · 全美股标的" },
+    { v: "1M+",    l: t.home.stats.contracts, icon: Boxes,    src: "OPRA · 实时合约覆盖" },
+    { v: "<120ms", l: t.home.stats.latency,   icon: Gauge,    src: "端到端中位延时" },
+    { v: "24/7",   l: t.home.stats.uptime,    icon: Clock,    src: "数据流持续守护" },
   ];
   const [gexTicker, setGexTicker] = useState<keyof typeof GEX_DATA>("SPY");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -250,12 +251,17 @@ export default function Index() {
 
         {/* Stat strip */}
         <div id="stats" className="mt-24 grid grid-cols-2 md:grid-cols-4 border-y border-border">
-          {stats.map((s, i) => (
-            <div key={s.l} className={`py-7 px-2 ${i !== 0 ? "md:border-l border-border" : ""} ${i === 1 ? "border-l border-border" : ""} ${i === 2 ? "md:border-l border-l-0 border-t md:border-t-0 border-border" : ""} ${i === 3 ? "border-t md:border-t-0 border-l border-border" : ""}`}>
-              <div className="font-mono text-3xl md:text-5xl font-semibold tracking-tight tabular-nums">{s.v}</div>
-              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground mt-2">{s.l}</div>
-            </div>
-          ))}
+          {stats.map((s, i) => {
+            const Icn = s.icon;
+            return (
+              <div key={s.l} className={`py-7 px-4 ${i !== 0 ? "md:border-l border-border" : ""} ${i === 1 ? "border-l border-border" : ""} ${i === 2 ? "md:border-l border-l-0 border-t md:border-t-0 border-border" : ""} ${i === 3 ? "border-t md:border-t-0 border-l border-border" : ""}`}>
+                <Icn className="h-4 w-4 text-primary/80 mb-3" />
+                <div className="font-mono text-3xl md:text-5xl font-semibold tracking-tight tabular-nums">{s.v}</div>
+                <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground mt-2">{s.l}</div>
+                <div className="text-[10px] font-mono text-muted-foreground/60 mt-1.5">{s.src}</div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -275,19 +281,38 @@ export default function Index() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-xl overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {t.home.modules.map((m, i) => {
             const Icon = moduleIcons[i] ?? Activity;
             const k = String(i + 1).padStart(2, "0");
+            // Bento: first two cards span 2 columns on lg; rest are 1 col
+            const span = i < 2 ? "lg:col-span-2" : "lg:col-span-1";
+            const minH = i < 2 ? "min-h-[260px]" : "min-h-[220px]";
+            const featured = i < 2;
             return (
-              <div key={i} className="group relative p-7 bg-card/60 backdrop-blur hover:bg-card transition-colors min-h-[220px] flex flex-col">
-                <div className="flex items-start justify-between mb-8">
-                  <Icon className="h-6 w-6 text-primary" />
-                  <span className="text-[10px] font-mono text-muted-foreground tracking-[0.2em]">{k}</span>
+              <div
+                key={i}
+                className={`group relative ${span} ${minH} rounded-xl border border-border bg-card/60 backdrop-blur p-7 overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card flex flex-col`}
+              >
+                {/* hover gradient wash */}
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  style={{
+                    background:
+                      i % 2 === 0
+                        ? "radial-gradient(ellipse at top right, hsl(165 90% 50% / 0.10), transparent 60%)"
+                        : "radial-gradient(ellipse at top right, hsl(280 85% 65% / 0.10), transparent 60%)",
+                  }}
+                />
+                <div className="relative flex items-start justify-between mb-8">
+                  <div className="h-10 w-10 rounded-lg border border-border bg-background/60 grid place-items-center">
+                    <Icon className={`h-5 w-5 ${i % 2 === 0 ? "text-primary" : "text-accent"}`} />
+                  </div>
+                  <span className="font-mono text-[10px] text-muted-foreground tracking-[0.2em]">{k}</span>
                 </div>
-                <div className="text-xl font-semibold tracking-tight mb-2">{m.t}</div>
-                <div className="text-sm text-muted-foreground leading-relaxed">{m.d}</div>
-                <ArrowUpRight className="absolute bottom-6 right-6 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all" />
+                <div className={`relative ${featured ? "text-2xl" : "text-lg"} font-semibold tracking-tight mb-2`}>{m.t}</div>
+                <div className="relative text-sm text-muted-foreground leading-relaxed">{m.d}</div>
+                <ArrowUpRight className="absolute bottom-6 right-6 h-4 w-4 text-muted-foreground translate-x-0 translate-y-0 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all duration-300" />
               </div>
             );
           })}

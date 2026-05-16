@@ -5,7 +5,7 @@ const zh = {
     livePill: "Polygon.io · 实时期权数据",
     heroPre: "看见", heroEm: "市场", heroPost: "在它", heroPostBefore: "出手前", heroPostEnd: ".",
     heroBody: "OPTI-X 把整张美股期权链拆解成三维 Greeks、GEX 微观结构与可执行的策略信号 —— 一套为系统化交易者打造的市场洞察终端。",
-    cta: "开始使用", explore: "探索模块",
+    cta: "进入终端", explore: "探索模块",
     cardTag: "0DTE · GEX",
     stats: { tickers: "美股标的", contracts: "实时期权合约", latency: "端到端延时", uptime: "数据流守护" },
     sectionTag: "06 模块",
