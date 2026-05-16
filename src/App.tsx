@@ -18,11 +18,13 @@ import Signals from "./pages/app/Signals.tsx";
 import Orderbook from "./pages/app/Orderbook.tsx";
 import Flow from "./pages/app/Flow.tsx";
 import { LanguageProvider } from "./i18n";
+import { ThemeProvider } from "./hooks/useTheme";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <ThemeProvider>
     <LanguageProvider>
     <TooltipProvider>
       <Toaster />
@@ -48,6 +50,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
     </LanguageProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

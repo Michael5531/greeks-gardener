@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import MarketStatusBar from "./MarketStatusBar";
 import GlobalAIChat from "./GlobalAIChat";
+import ThemeToggle from "./ThemeToggle";
 import { useT } from "@/i18n";
 
 type NavItem = { to: string; label: string; icon: any; end?: boolean };
@@ -160,11 +161,12 @@ export default function AppLayout() {
 
         {/* Footer: collapse + user */}
         <div className="border-t border-border p-2 space-y-1">
+          <div className={cn("flex items-center gap-1", collapsed ? "flex-col" : "")}>
           <button
             type="button"
             onClick={() => setCollapsed(c => !c)}
             className={cn(
-              "w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors",
+              "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors",
               collapsed && "justify-center",
             )}
             title={collapsed ? "Expand" : "Collapse"}
@@ -172,6 +174,8 @@ export default function AppLayout() {
             {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
             {!collapsed && <span>Collapse</span>}
           </button>
+          <ThemeToggle />
+          </div>
           {!collapsed && user?.email && (
             <div className="px-2.5 pt-1 text-[10px] text-muted-foreground truncate font-mono">{user.email}</div>
           )}
