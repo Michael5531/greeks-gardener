@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useT } from "@/i18n";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const tape = [
   { s: "SPY",  p: 612.34, c: +0.82 },
@@ -96,6 +97,7 @@ export default function Index() {
         </div>
         <div className="flex items-center gap-3">
           <LanguageSwitcher />
+          <ThemeToggle />
           <Link to="/auth">
             <Button size="sm" className="font-mono uppercase tracking-wider">
               {t.home.nav.launch} <ArrowRight className="h-3.5 w-3.5" />
