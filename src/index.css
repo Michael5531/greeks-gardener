@@ -8,98 +8,113 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Financial terminal — dark by default */
-    --background: 222 30% 6%;
-    --foreground: 180 12% 92%;
+    /* === Noir & Gold — Light (paper) === */
+    --background: 40 30% 97%;
+    --foreground: 0 0% 8%;
 
-    --card: 222 28% 8%;
-    --card-foreground: 180 12% 92%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
 
-    --popover: 222 30% 7%;
-    --popover-foreground: 180 12% 92%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
 
-    --primary: 165 90% 50%;
-    --primary-foreground: 222 30% 6%;
+    --primary: 43 65% 42%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 222 22% 14%;
-    --secondary-foreground: 180 12% 92%;
+    --secondary: 40 20% 92%;
+    --secondary-foreground: 0 0% 8%;
 
-    --muted: 222 18% 14%;
-    --muted-foreground: 215 14% 60%;
+    --muted: 40 15% 90%;
+    --muted-foreground: 30 8% 38%;
 
-    --accent: 280 85% 65%;
-    --accent-foreground: 222 30% 6%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 43 75% 70%;
 
-    --destructive: 350 90% 60%;
+    --destructive: 350 75% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --bull: 158 75% 48%;
-    --bear: 350 90% 60%;
-    --warning: 40 95% 55%;
+    --bull: 158 65% 36%;
+    --bear: 350 75% 45%;
+    --warning: 38 90% 45%;
 
-    --border: 222 20% 16%;
-    --input: 222 22% 12%;
-    --ring: 165 90% 50%;
-
-    --grid-line: 222 20% 14%;
+    --border: 40 15% 84%;
+    --input: 40 15% 88%;
+    --ring: 43 65% 42%;
+    --grid-line: 40 15% 88%;
 
     --radius: 0.375rem;
 
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-display: 'Space Grotesk', system-ui, sans-serif;
+    --font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
 
-    --gradient-primary: linear-gradient(135deg, hsl(165 90% 50%), hsl(195 90% 55%));
-    --gradient-accent: linear-gradient(135deg, hsl(280 85% 65%), hsl(220 90% 60%));
-    --gradient-bg: radial-gradient(ellipse at top, hsl(222 35% 10%) 0%, hsl(222 30% 5%) 60%);
+    --gradient-primary: linear-gradient(135deg, hsl(43 65% 42%), hsl(43 80% 60%));
+    --gradient-accent:  linear-gradient(135deg, hsl(43 75% 60%), hsl(35 70% 45%));
+    --gradient-bg:      radial-gradient(ellipse at top, hsl(40 35% 98%) 0%, hsl(40 25% 94%) 60%);
 
-    --shadow-glow: 0 0 40px hsl(165 90% 50% / 0.15);
-    --shadow-elevated: 0 12px 40px -12px hsl(0 0% 0% / 0.6);
+    --shadow-glow: 0 0 40px hsl(43 70% 50% / 0.20);
+    --shadow-elevated: 0 12px 40px -12px hsl(0 0% 0% / 0.18);
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 40 25% 96%;
+    --sidebar-foreground: 0 0% 18%;
+    --sidebar-primary: 43 65% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 20% 92%;
+    --sidebar-accent-foreground: 0 0% 8%;
+    --sidebar-border: 40 15% 84%;
+    --sidebar-ring: 43 65% 42%;
   }
 
   .dark {
-    --background: 222 30% 6%;
-    --foreground: 180 12% 92%;
-    --card: 222 28% 8%;
-    --card-foreground: 180 12% 92%;
-    --popover: 222 30% 7%;
-    --popover-foreground: 180 12% 92%;
-    --primary: 165 90% 50%;
-    --primary-foreground: 222 30% 6%;
-    --secondary: 222 22% 14%;
-    --secondary-foreground: 180 12% 92%;
-    --muted: 222 18% 14%;
-    --muted-foreground: 215 14% 60%;
-    --accent: 280 85% 65%;
-    --accent-foreground: 222 30% 6%;
+    /* === Noir & Gold — Dark (noir) === */
+    --background: 0 0% 5%;
+    --foreground: 43 25% 92%;
+
+    --card: 0 0% 8%;
+    --card-foreground: 43 25% 92%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 43 25% 92%;
+
+    --primary: 43 75% 58%;
+    --primary-foreground: 0 0% 6%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 43 25% 92%;
+
+    --muted: 0 0% 14%;
+    --muted-foreground: 43 12% 62%;
+
+    --accent: 43 85% 76%;
+    --accent-foreground: 0 0% 6%;
+
     --destructive: 350 90% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 222 20% 16%;
-    --input: 222 22% 12%;
-    --ring: 165 90% 50%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --bull: 158 70% 50%;
+    --bear: 350 90% 60%;
+    --warning: 40 95% 60%;
+
+    --border: 40 12% 18%;
+    --input: 0 0% 12%;
+    --ring: 43 75% 58%;
+    --grid-line: 40 10% 14%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(43 75% 58%), hsl(43 90% 76%));
+    --gradient-accent:  linear-gradient(135deg, hsl(43 85% 76%), hsl(35 70% 50%));
+    --gradient-bg:      radial-gradient(ellipse at top, hsl(0 0% 9%) 0%, hsl(0 0% 4%) 60%);
+
+    --shadow-glow: 0 0 40px hsl(43 75% 58% / 0.25);
+    --shadow-elevated: 0 12px 40px -12px hsl(0 0% 0% / 0.7);
+
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 43 20% 88%;
+    --sidebar-primary: 43 75% 58%;
+    --sidebar-primary-foreground: 0 0% 6%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 43 25% 92%;
+    --sidebar-border: 40 12% 18%;
+    --sidebar-ring: 43 75% 58%;
   }
 }
 
@@ -110,9 +125,14 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-display);
+    font-family: var(--font-body);
     background-image: var(--gradient-bg);
     background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
 
   #root {
