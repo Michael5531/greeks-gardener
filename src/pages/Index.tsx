@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useT } from "@/i18n";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const tape = [
   { s: "SPY",  p: 612.34, c: +0.82 },
@@ -82,9 +83,9 @@ export default function Index() {
       {/* Ambient layers */}
       <div className="absolute inset-0 grid-bg opacity-[0.18] pointer-events-none" />
       <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[640px] w-[1100px] rounded-full pointer-events-none blur-3xl opacity-60"
-        style={{ background: "radial-gradient(closest-side, hsl(165 90% 50% / 0.25), transparent 70%)" }} />
+        style={{ background: "radial-gradient(closest-side, hsl(43 70% 50% / 0.25), transparent 70%)" }} />
       <div className="absolute top-[20%] -right-40 h-[500px] w-[500px] rounded-full pointer-events-none blur-3xl opacity-50"
-        style={{ background: "radial-gradient(closest-side, hsl(280 85% 65% / 0.22), transparent 70%)" }} />
+        style={{ background: "radial-gradient(closest-side, hsl(43 80% 70% / 0.22), transparent 70%)" }} />
 
       {/* Nav */}
       <header className="relative z-20 max-w-[1400px] mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
@@ -96,6 +97,7 @@ export default function Index() {
         </div>
         <div className="flex items-center gap-3">
           <LanguageSwitcher />
+          <ThemeToggle />
           <Link to="/auth">
             <Button size="sm" className="font-mono uppercase tracking-wider">
               {t.home.nav.launch} <ArrowRight className="h-3.5 w-3.5" />
@@ -133,7 +135,7 @@ export default function Index() {
                 {t.home.heroPre}{" "}
                 <em
                   className="not-italic bg-clip-text text-transparent"
-                  style={{ backgroundImage: "linear-gradient(135deg, hsl(165 90% 55%), hsl(280 85% 70%))" }}
+                  style={{ backgroundImage: "linear-gradient(135deg, hsl(43 75% 60%), hsl(43 85% 78%))" }}
                 >
                   {t.home.heroEm}
                 </em>
@@ -160,7 +162,7 @@ export default function Index() {
           {/* Terminal preview card */}
           <div className="lg:col-span-4">
             <div className="relative rounded-xl border border-border bg-card/70 backdrop-blur p-5 elevated">
-              <div className="absolute -inset-px rounded-xl pointer-events-none -z-10" style={{ background: "linear-gradient(135deg, hsl(165 90% 50% / 0.4), transparent 40%, hsl(280 85% 65% / 0.3))" }} />
+              <div className="absolute -inset-px rounded-xl pointer-events-none -z-10" style={{ background: "linear-gradient(135deg, hsl(43 70% 50% / 0.4), transparent 40%, hsl(43 80% 70% / 0.3))" }} />
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-bear" />
@@ -300,8 +302,8 @@ export default function Index() {
                   style={{
                     background:
                       i % 2 === 0
-                        ? "radial-gradient(ellipse at top right, hsl(165 90% 50% / 0.10), transparent 60%)"
-                        : "radial-gradient(ellipse at top right, hsl(280 85% 65% / 0.10), transparent 60%)",
+                        ? "radial-gradient(ellipse at top right, hsl(43 70% 50% / 0.10), transparent 60%)"
+                        : "radial-gradient(ellipse at top right, hsl(43 80% 70% / 0.10), transparent 60%)",
                   }}
                 />
                 <div className="relative flex items-start justify-between mb-8">
@@ -320,7 +322,7 @@ export default function Index() {
 
         {/* CTA */}
         <div className="mt-24 relative rounded-2xl border border-border overflow-hidden">
-          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at top right, hsl(165 90% 50% / 0.18), transparent 60%), radial-gradient(ellipse at bottom left, hsl(280 85% 65% / 0.15), transparent 60%)" }} />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at top right, hsl(43 70% 50% / 0.18), transparent 60%), radial-gradient(ellipse at bottom left, hsl(43 80% 70% / 0.15), transparent 60%)" }} />
           <div className="relative p-10 md:p-16 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
             <div>
               <div className="text-[11px] font-mono uppercase tracking-[0.3em] text-muted-foreground mb-4">{t.home.ctaTag}</div>
@@ -387,18 +389,18 @@ function Logo() {
         {/* glass plate */}
         <div className="relative h-10 w-10 rounded-lg border border-border/80 bg-background/80 backdrop-blur grid place-items-center overflow-hidden">
           <div className="absolute inset-0 opacity-30"
-            style={{ background: "linear-gradient(135deg, hsl(165 90% 50% / 0.5), transparent 50%, hsl(280 85% 65% / 0.4))" }} />
+            style={{ background: "linear-gradient(135deg, hsl(43 70% 50% / 0.5), transparent 50%, hsl(43 80% 70% / 0.4))" }} />
           <svg viewBox="0 0 32 32" className="relative h-5 w-5">
             <defs>
               <linearGradient id="lg-stroke" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="hsl(165 90% 55%)" />
-                <stop offset="100%" stopColor="hsl(280 85% 70%)" />
+                <stop offset="0%" stopColor="hsl(43 75% 60%)" />
+                <stop offset="100%" stopColor="hsl(43 85% 78%)" />
               </linearGradient>
             </defs>
             {/* X-curve: rising and falling, like option payoff */}
             <path d="M3 26 L13 14 L19 20 L29 6" fill="none" stroke="url(#lg-stroke)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            <circle cx="13" cy="14" r="1.6" fill="hsl(165 90% 55%)" />
-            <circle cx="19" cy="20" r="1.6" fill="hsl(280 85% 70%)" />
+            <circle cx="13" cy="14" r="1.6" fill="hsl(43 75% 60%)" />
+            <circle cx="19" cy="20" r="1.6" fill="hsl(43 85% 78%)" />
           </svg>
         </div>
       </div>

@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import MarketStatusBar from "./MarketStatusBar";
 import GlobalAIChat from "./GlobalAIChat";
+import ThemeToggle from "./ThemeToggle";
 import { useT } from "@/i18n";
 
 type NavItem = { to: string; label: string; icon: any; end?: boolean };
@@ -84,17 +85,17 @@ export default function AppLayout() {
                 style={{ background: "var(--gradient-primary)" }} />
               <div className="relative h-9 w-9 rounded-lg border border-border/80 bg-background/80 backdrop-blur grid place-items-center overflow-hidden">
                 <div className="absolute inset-0 opacity-30"
-                  style={{ background: "linear-gradient(135deg, hsl(165 90% 50% / 0.5), transparent 50%, hsl(280 85% 65% / 0.4))" }} />
+                  style={{ background: "linear-gradient(135deg, hsl(43 70% 50% / 0.5), transparent 50%, hsl(43 80% 70% / 0.4))" }} />
                 <svg viewBox="0 0 32 32" style={{ height: 18, width: 18 }} className="relative">
                   <defs>
                     <linearGradient id="al-stroke" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="hsl(165 90% 55%)" />
-                      <stop offset="100%" stopColor="hsl(280 85% 70%)" />
+                      <stop offset="0%" stopColor="hsl(43 75% 60%)" />
+                      <stop offset="100%" stopColor="hsl(43 85% 78%)" />
                     </linearGradient>
                   </defs>
                   <path d="M3 26 L13 14 L19 20 L29 6" fill="none" stroke="url(#al-stroke)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="13" cy="14" r="1.6" fill="hsl(165 90% 55%)" />
-                  <circle cx="19" cy="20" r="1.6" fill="hsl(280 85% 70%)" />
+                  <circle cx="13" cy="14" r="1.6" fill="hsl(43 75% 60%)" />
+                  <circle cx="19" cy="20" r="1.6" fill="hsl(43 85% 78%)" />
                 </svg>
               </div>
             </div>
@@ -160,11 +161,12 @@ export default function AppLayout() {
 
         {/* Footer: collapse + user */}
         <div className="border-t border-border p-2 space-y-1">
+          <div className={cn("flex items-center gap-1", collapsed ? "flex-col" : "")}>
           <button
             type="button"
             onClick={() => setCollapsed(c => !c)}
             className={cn(
-              "w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors",
+              "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors",
               collapsed && "justify-center",
             )}
             title={collapsed ? "Expand" : "Collapse"}
@@ -172,6 +174,8 @@ export default function AppLayout() {
             {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
             {!collapsed && <span>Collapse</span>}
           </button>
+          <ThemeToggle />
+          </div>
           {!collapsed && user?.email && (
             <div className="px-2.5 pt-1 text-[10px] text-muted-foreground truncate font-mono">{user.email}</div>
           )}
