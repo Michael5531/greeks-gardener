@@ -281,19 +281,38 @@ export default function Index() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-xl overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {t.home.modules.map((m, i) => {
             const Icon = moduleIcons[i] ?? Activity;
             const k = String(i + 1).padStart(2, "0");
+            // Bento: first two cards span 2 columns on lg; rest are 1 col
+            const span = i < 2 ? "lg:col-span-2" : "lg:col-span-1";
+            const minH = i < 2 ? "min-h-[260px]" : "min-h-[220px]";
+            const featured = i < 2;
             return (
-              <div key={i} className="group relative p-7 bg-card/60 backdrop-blur hover:bg-card transition-colors min-h-[220px] flex flex-col">
-                <div className="flex items-start justify-between mb-8">
-                  <Icon className="h-6 w-6 text-primary" />
-                  <span className="text-[10px] font-mono text-muted-foreground tracking-[0.2em]">{k}</span>
+              <div
+                key={i}
+                className={`group relative ${span} ${minH} rounded-xl border border-border bg-card/60 backdrop-blur p-7 overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card flex flex-col`}
+              >
+                {/* hover gradient wash */}
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  style={{
+                    background:
+                      i % 2 === 0
+                        ? "radial-gradient(ellipse at top right, hsl(165 90% 50% / 0.10), transparent 60%)"
+                        : "radial-gradient(ellipse at top right, hsl(280 85% 65% / 0.10), transparent 60%)",
+                  }}
+                />
+                <div className="relative flex items-start justify-between mb-8">
+                  <div className="h-10 w-10 rounded-lg border border-border bg-background/60 grid place-items-center">
+                    <Icon className={`h-5 w-5 ${i % 2 === 0 ? "text-primary" : "text-accent"}`} />
+                  </div>
+                  <span className="font-mono text-[10px] text-muted-foreground tracking-[0.2em]">{k}</span>
                 </div>
-                <div className="text-xl font-semibold tracking-tight mb-2">{m.t}</div>
-                <div className="text-sm text-muted-foreground leading-relaxed">{m.d}</div>
-                <ArrowUpRight className="absolute bottom-6 right-6 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all" />
+                <div className={`relative ${featured ? "text-2xl" : "text-lg"} font-semibold tracking-tight mb-2`}>{m.t}</div>
+                <div className="relative text-sm text-muted-foreground leading-relaxed">{m.d}</div>
+                <ArrowUpRight className="absolute bottom-6 right-6 h-4 w-4 text-muted-foreground translate-x-0 translate-y-0 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all duration-300" />
               </div>
             );
           })}
