@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
-  Activity, BarChart3, Boxes, History, Home, Layers, LayoutDashboard,
+  Activity, BarChart3, Boxes, History, Layers, LayoutDashboard,
   LineChart, LogOut, Radar, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
