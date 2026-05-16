@@ -110,7 +110,7 @@ export default function Index() {
             <div className="inline-flex items-center gap-2 mb-8">
               <span className="h-1.5 w-1.5 rounded-full bg-bull animate-pulse" />
               <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-muted-foreground">
-                Polygon.io · {t.home.livePill}
+                {t.home.livePill}
               </span>
             </div>
             <h1 style={serif} className="text-[clamp(3rem,9vw,7.5rem)] font-black leading-[0.92] tracking-[-0.02em]">
