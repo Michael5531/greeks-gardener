@@ -40,36 +40,41 @@ export default function WatchCard({
     <div
       onClick={onSelect}
       className={cn(
-        "rounded-lg border bg-card/50 p-4 group hover:border-primary/60 transition-colors cursor-pointer",
-        active ? "border-primary ring-1 ring-primary/40" : "border-border",
+        "relative border-r border-b border-border p-5 group transition-colors cursor-pointer bg-transparent hover:bg-secondary/40",
+        active && "bg-secondary/60",
       )}
     >
+      {active && (
+        <span className="absolute top-0 left-0 h-0.5 w-12 bg-primary" aria-hidden />
+      )}
       <div className="flex items-start justify-between">
         <div>
-          <div className="font-mono font-bold text-lg">{ticker}</div>
-          <div className="font-mono text-2xl mt-1">{price != null ? `$${price.toFixed(2)}` : "—"}</div>
+          <div className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">{ticker}</div>
+          <div className="font-serif-display text-[34px] leading-none mt-2 tabular-nums">
+            {price != null ? `$${price.toFixed(2)}` : "—"}
+          </div>
           {isExt && price != null && (
             <span
               title={t.market.extTip}
-              className="inline-block mt-1 px-1.5 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent text-[9px] font-mono uppercase tracking-wider"
+              className="inline-block mt-2 text-primary text-[9px] font-mono uppercase tracking-[0.2em]"
             >
               {t.market.ext}
             </span>
           )}
           {chg != null && (
-            <div className={cn("text-xs font-mono flex items-center gap-1 mt-0.5", up ? "text-bull" : "text-bear")}>
+            <div className={cn("text-[11px] font-mono flex items-center gap-1 mt-1.5", up ? "text-bull" : "text-bear")}>
               {up ? <TrendingUp className="h-3 w-3"/> : <TrendingDown className="h-3 w-3"/>}
               {chg >= 0 ? "+" : ""}{chg.toFixed(2)} ({((chgPct ?? 0) * 100).toFixed(2)}%)
             </div>
           )}
         </div>
-        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="mt-3 flex items-end gap-2">
-        <div className="h-12 flex-1 min-w-0">
+      <div className="mt-4 flex items-end gap-3">
+        <div className="h-14 flex-1 min-w-0">
           {series.length > 1 && (
             <ChartSizer>
               {({ width, height }) => (
@@ -88,16 +93,28 @@ export default function WatchCard({
           )}
         </div>
         <div className="text-right">
-          <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{t.market.ytd}</div>
-          <div className={cn("text-xs font-mono", ytdUp ? "text-bull" : "text-bear")}>
+          <div className="text-[9px] font-mono uppercase tracking-[0.25em] text-muted-foreground">{t.market.ytd}</div>
+          <div className={cn("text-sm font-mono tabular-nums mt-0.5", ytdUp ? "text-bull" : "text-bear")}>
             {ytd != null ? `${ytd >= 0 ? "+" : ""}${(ytd * 100).toFixed(2)}%` : "—"}
           </div>
         </div>
       </div>
 
-      <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
-        <Link to={`/app/chain?ticker=${ticker}`} onClick={onSelect}><Button size="sm" variant="secondary">{t.dashboard.openChain}</Button></Link>
-        <Link to={`/app/greeks?ticker=${ticker}`} onClick={onSelect}><Button size="sm" variant="ghost">{t.dashboard.open3D}</Button></Link>
+      <div className="mt-5 flex items-center gap-5 pt-3 border-t border-border/60" onClick={(e) => e.stopPropagation()}>
+        <Link
+          to={`/app/chain?ticker=${ticker}`}
+          onClick={onSelect}
+          className="font-serif-display italic text-sm text-foreground hover:text-primary transition-colors"
+        >
+          {t.dashboard.openChain} →
+        </Link>
+        <Link
+          to={`/app/greeks?ticker=${ticker}`}
+          onClick={onSelect}
+          className="font-serif-display italic text-sm text-muted-foreground hover:text-primary transition-colors"
+        >
+          {t.dashboard.open3D} →
+        </Link>
       </div>
     </div>
   );
