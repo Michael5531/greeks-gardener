@@ -55,35 +55,35 @@ export default function HeroTicker({ ticker }: { ticker: string }) {
   const displayPrice = quote?.price ?? fallbackPrice;
 
   return (
-    <div className="rounded-lg border border-border bg-card/40 p-4 grid md:grid-cols-[auto_1fr_auto] gap-4 items-center">
+    <div className="grid md:grid-cols-[auto_1fr_auto] gap-8 items-center">
       <div>
-        <div className="flex items-center gap-2">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{ticker}</div>
-          <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-mono uppercase tracking-wider", sessionTone)}>
+        <div className="flex items-center gap-3">
+          <div className="text-[10px] font-mono uppercase tracking-[0.28em] text-muted-foreground">{ticker}</div>
+          <span className={cn("inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-[0.2em]", sessionTone.replace(/bg-[^\s]+/g, "").replace(/border-[^\s]+/g, ""))}>
             <span className={cn("h-1 w-1 rounded-full bg-current", session === "regular" && "animate-pulse")} />
             {sessionLabel}
           </span>
         </div>
-        <div className="flex items-baseline gap-2 mt-0.5">
-          <div className="text-3xl font-mono font-semibold">
+        <div className="flex items-baseline gap-3 mt-1">
+          <div className="font-serif-display text-5xl md:text-6xl tabular-nums leading-none">
             {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
           </div>
           {isExt && displayPrice != null && (
             <span
               title={t.market.extTip}
-              className="px-1.5 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent text-[9px] font-mono uppercase tracking-wider"
+              className="text-primary text-[9px] font-mono uppercase tracking-[0.2em]"
             >
               {t.market.ext}
             </span>
           )}
           {quote?.change != null && (
-            <div className={cn("text-xs font-mono flex items-center gap-1", liveUp ? "text-bull" : "text-bear")}>
+            <div className={cn("text-xs font-mono flex items-center gap-1 tabular-nums", liveUp ? "text-bull" : "text-bear")}>
               {liveUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
               {quote.change >= 0 ? "+" : ""}{quote.change.toFixed(2)} ({((quote.changePct ?? 0) * 100).toFixed(2)}%)
             </div>
           )}
         </div>
-        <div className="mt-1 text-[10px] text-muted-foreground font-mono">
+        <div className="mt-2 text-[10px] text-muted-foreground font-mono uppercase tracking-[0.25em]">
           {isOpen ? t.market.since : `${t.market.prevDay} · ${intradayDate}`}
         </div>
       </div>
@@ -112,10 +112,10 @@ export default function HeroTicker({ ticker }: { ticker: string }) {
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t.market.ytd}</div>
-          <div className={cn("text-base font-mono", ytdUp ? "text-bull" : "text-bear")}>
+          <div className="text-[10px] font-mono uppercase tracking-[0.28em] text-muted-foreground">{t.market.ytd}</div>
+          <div className={cn("font-serif-display text-2xl tabular-nums mt-1", ytdUp ? "text-bull" : "text-bear")}>
             {ytdChg != null ? `${ytdChg >= 0 ? "+" : ""}${(ytdChg * 100).toFixed(2)}%` : "—"}
           </div>
         </div>
