@@ -36,34 +36,72 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t.dashboard.title}</h1>
-        <p className="text-sm text-muted-foreground">{t.dashboard.subtitle}</p>
-      </div>
+    <div className="px-6 md:px-10 py-10 space-y-10 max-w-[1480px]">
+      {/* Editorial masthead */}
+      <header className="flex items-end justify-between gap-6 border-b border-foreground/80 pb-5">
+        <div>
+          <div className="editorial-eyebrow mb-3">№01 — Markets · Watchlist</div>
+          <h1 className="editorial-title">
+            {t.dashboard.title}<span className="text-primary font-serif-display italic">.</span>
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground max-w-xl font-serif-display italic text-base">
+            {t.dashboard.subtitle}
+          </p>
+        </div>
+        <div className="hidden md:block text-right text-[10px] font-mono uppercase tracking-[0.28em] text-muted-foreground">
+          <div>Vol. 26 · Issue {new Date().getMonth() + 1}</div>
+          <div className="mt-1">{items.length.toString().padStart(2, "0")} Holdings</div>
+        </div>
+      </header>
 
-      {selectedTicker && <HeroTicker ticker={selectedTicker} />}
+      {selectedTicker && (
+        <section className="border-y border-border py-6">
+          <div className="editorial-eyebrow mb-3">The Lead · Live Quote</div>
+          <HeroTicker ticker={selectedTicker} />
+        </section>
+      )}
 
-      <div className="max-w-xl">
-        <TickerSearch current={selectedTicker} onSelect={t => add(t.ticker)} />
-      </div>
+      <section className="grid md:grid-cols-12 gap-6 items-end">
+        <div className="md:col-span-4">
+          <div className="editorial-eyebrow mb-2">Search</div>
+          <div className="font-serif-display italic text-xl text-foreground">
+            Add a new underlying →
+          </div>
+        </div>
+        <div className="md:col-span-8">
+          <TickerSearch current={selectedTicker} onSelect={t => add(t.ticker)} />
+        </div>
+      </section>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {items.length === 0 && (
-          <div className="col-span-full p-8 rounded-lg border border-dashed border-border text-center text-sm text-muted-foreground">
-            {t.dashboard.empty}
+      <section>
+        <div className="flex items-baseline justify-between border-b border-border pb-3 mb-0">
+          <div className="flex items-baseline gap-3">
+            <span className="editorial-eyebrow">№02</span>
+            <h2 className="font-serif-display text-3xl text-foreground">The Watchlist</h2>
+          </div>
+          <span className="editorial-eyebrow hidden sm:block">{items.length} entries</span>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="py-20 text-center border-b border-border">
+            <p className="font-serif-display italic text-2xl text-muted-foreground">
+              {t.dashboard.empty}
+            </p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 -mx-px">
+            {items.map(it => (
+              <WatchCard
+                key={it.id}
+                ticker={it.ticker}
+                active={selectedTicker === it.ticker}
+                onSelect={() => setSelectedTicker(it.ticker)}
+                onRemove={() => remove(it.id)}
+              />
+            ))}
           </div>
         )}
-        {items.map(it => (
-          <WatchCard
-            key={it.id}
-            ticker={it.ticker}
-            active={selectedTicker === it.ticker}
-            onSelect={() => setSelectedTicker(it.ticker)}
-            onRemove={() => remove(it.id)}
-          />
-        ))}
-      </div>
+      </section>
     </div>
   );
 }
