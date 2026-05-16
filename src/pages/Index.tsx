@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Activity, BarChart3, LineChart, TrendingUp, Boxes, Radar,
   ArrowUpRight, ArrowDownRight, Zap, Layers, Sparkles, ArrowRight, ShieldCheck,
+  Database, Gauge, Clock, Infinity as InfinityIcon,
 } from "lucide-react";
 import { useT } from "@/i18n";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -62,10 +63,10 @@ const GEX_DATA: Record<string, { spot: number; zeroG: number; strikes: { k: numb
 export default function Index() {
   const t = useT();
   const stats = [
-    { v: "8K+",   l: t.home.stats.tickers },
-    { v: "1M+",   l: t.home.stats.contracts },
-    { v: "<120ms",l: t.home.stats.latency },
-    { v: "24/7",  l: t.home.stats.uptime },
+    { v: "8K+",    l: t.home.stats.tickers,   icon: Database, src: "Polygon.io · 全美股标的" },
+    { v: "1M+",    l: t.home.stats.contracts, icon: Boxes,    src: "OPRA · 实时合约覆盖" },
+    { v: "<120ms", l: t.home.stats.latency,   icon: Gauge,    src: "端到端中位延时" },
+    { v: "24/7",   l: t.home.stats.uptime,    icon: Clock,    src: "数据流持续守护" },
   ];
   const [gexTicker, setGexTicker] = useState<keyof typeof GEX_DATA>("SPY");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -250,12 +251,17 @@ export default function Index() {
 
         {/* Stat strip */}
         <div id="stats" className="mt-24 grid grid-cols-2 md:grid-cols-4 border-y border-border">
-          {stats.map((s, i) => (
-            <div key={s.l} className={`py-7 px-2 ${i !== 0 ? "md:border-l border-border" : ""} ${i === 1 ? "border-l border-border" : ""} ${i === 2 ? "md:border-l border-l-0 border-t md:border-t-0 border-border" : ""} ${i === 3 ? "border-t md:border-t-0 border-l border-border" : ""}`}>
-              <div className="font-mono text-3xl md:text-5xl font-semibold tracking-tight tabular-nums">{s.v}</div>
-              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground mt-2">{s.l}</div>
-            </div>
-          ))}
+          {stats.map((s, i) => {
+            const Icn = s.icon;
+            return (
+              <div key={s.l} className={`py-7 px-4 ${i !== 0 ? "md:border-l border-border" : ""} ${i === 1 ? "border-l border-border" : ""} ${i === 2 ? "md:border-l border-l-0 border-t md:border-t-0 border-border" : ""} ${i === 3 ? "border-t md:border-t-0 border-l border-border" : ""}`}>
+                <Icn className="h-4 w-4 text-primary/80 mb-3" />
+                <div className="font-mono text-3xl md:text-5xl font-semibold tracking-tight tabular-nums">{s.v}</div>
+                <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground mt-2">{s.l}</div>
+                <div className="text-[10px] font-mono text-muted-foreground/60 mt-1.5">{s.src}</div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
