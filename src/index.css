@@ -214,6 +214,29 @@ All colors MUST be HSL.
     @apply inline-flex items-center justify-center rounded border border-border bg-secondary/60 px-1.5 h-5 text-[10px] font-mono text-muted-foreground;
   }
 
+  /* ---- Editorial primitives (terminal pages) ------------------ */
+  .font-serif-display {
+    font-family: 'Instrument Serif', 'Noto Serif SC', Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+  .editorial-eyebrow {
+    @apply text-[10px] font-mono uppercase tracking-[0.28em] text-muted-foreground;
+  }
+  .editorial-title {
+    font-family: 'Instrument Serif', 'Noto Serif SC', Georgia, serif;
+    @apply text-[44px] md:text-[56px] leading-[0.95] tracking-tight;
+  }
+  .editorial-rule {
+    @apply border-t border-foreground/80;
+  }
+  .hairline { @apply border-border; }
+  .dotted-row {
+    background-image: linear-gradient(to right, hsl(var(--border)) 33%, transparent 0%);
+    background-position: bottom;
+    background-size: 6px 1px;
+    background-repeat: repeat-x;
+  }
+
   @media (max-width: 767px) {
     main > div.p-6 {
       padding: 1rem;
