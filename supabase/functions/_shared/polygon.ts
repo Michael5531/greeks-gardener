@@ -45,3 +45,14 @@ export async function getOptionsExpirations(ticker: string): Promise<string[]> {
   }
   return Array.from(seen).sort();
 }
+
+export async function getStockBars(
+  ticker: string,
+  from: string,
+  to: string,
+  timespan: "day" | "hour" = "day",
+): Promise<any[]> {
+  const url = `${BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/${timespan}/${from}/${to}?adjusted=true&sort=asc&limit=50000&apiKey=${KEY}`;
+  const d = await fetchJson(url);
+  return Array.isArray(d?.results) ? d.results : [];
+}
