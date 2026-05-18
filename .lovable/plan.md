@@ -1,130 +1,163 @@
-## 现状盘点
+## 诊断
 
-你现在已经覆盖的能力（基于 8 个 app 页面 + 14 个 edge function）：
+你点中了产品的根本问题：现在的 Opti-X 是"分析模块拼盘"（GEX/Greeks/IV/Flow 各一页），不是**交易工作流**。
 
-- **行情/链**：Overview · Chain · Orderbook · Flow（历史期权流）
-- **分析**：3D Greeks · GEX（含 flip 点）· IV Surface
-- **策略**：多腿 Builder + Pricer + Payoff + Backtest（含 custom legs）+ Signals 扫描
-- **AI**：ai-chat、analyze-gex
-- **基础设施**：Polygon 代理、computed cache、react-query 共享缓存
+你的画像（买方 · 方向性 + 波动率 + 0DTE · 用 IBKR · 三大痛点全占）意味着：
+- 你是**净付权利金**的人 → 最怕 IV 高位买、θ 烧、看对方向选错 strike
+- 你做 0DTE/Gamma → 需要秒级 walls + flow，不是 D+1 分析
+- 你需要**闭环**：今天交易什么 → 怎么交易 → 现在怎么管 → 错在哪
 
-定位类比：介于 **Unusual Whales 入门版** 和 **OptionStrat / Market Chameleon** 之间，但缺少"投资者真正会续费"的几个支柱模块。
-
----
-
-## 与付费终端（UW $48/mo、Market Chameleon $69/mo、OptionStrat $19/mo、SpotGamma $99/mo）的差距
-
-按"对续费影响最大 → 最小"排列：
-
-### P0 · 决策闭环（最缺，直接影响付费意愿）
-
-1. **Unusual Options Activity / Smart Flow 实时雷达**
-   你现在只有"历史 flow"。差距：
-   - 实时（或 15 分钟延迟）大单扫描：volume > X×OI、premium > $50k、sweep/block/split 分类
-   - "Repeat hitter"：同一 contract 当日多次扫到
-   - 推送：邮件 / Webhook / Discord
-   - 这是 UW 最贵也最有黏性的功能
-
-2. **Earnings & Catalyst 中心**
-   - 财报日历 + 隐含波动 vs 历史已实现波动差（IV Crush 预测）
-   - 财报前后 straddle 历史回报表
-   - Ex-div、FOMC、CPI 事件叠加到 IV term structure
-   - 现在 Backtest 没法回答"NVDA 财报前买 ATM straddle 历史胜率"
-
-3. **Dealer Positioning Pack（SpotGamma 杀手锏）**
-   你已有 GEX flip，差距：
-   - **Vanna / Charm exposure**（VEX / CEX）按 strike
-   - **Dealer 0DTE 持仓** 单独剖析
-   - **Gamma walls / Call & Put walls** 标注到当日 chart
-   - **HIRO 类** 资金流向时间序列
-
-### P1 · 数据深度（让分析"可信"）
-
-4. **历史 IV / HV 数据库**
-   - IV Rank、IV Percentile（30/60/90/252 天）—— 选 strategy 的前提
-   - HV20 / HV30 / HV60 与 IV30 的 spread 时间序列
-   - Term structure 历史快照（今天 vs 30 天前）
-
-5. **Skew & Smile 量化**
-   - 25Δ Risk Reversal、Butterfly
-   - Put/Call skew 时间序列
-   - Skew percentile rank（"现在 skew 比过去一年 X% 时间更陡"）
-
-6. **持仓变化（OI Δ）**
-   - 每日 OI delta by strike/exp（区分 open vs close）
-   - 大单 OI 异动榜
-   - 现在 chain 只能看 snapshot
-
-### P2 · 策略层（变现钩子）
-
-7. **Strategy Screener / Idea Lab**
-   - 全市场扫："找 IVR>70 + 财报 30 天外 + 流动性好的 short strangle 候选"
-   - 输出 expected return、POP、breakeven、margin
-   - 对标 Market Chameleon Trade Ideas
-
-8. **Portfolio / Positions Tracker**
-   - 用户录入持仓 → 实时净 Greeks、Beta-weighted Delta、margin、PnL attribution
-   - "如果 SPY -3% + VIX +5"压力测试
-   - 这是付费用户从"看"到"用"的关键
-
-9. **Probability Lab**
-   - 基于 IV 的 POP / P50 / Expected Value
-   - Monte Carlo 路径模拟（你已有 BS，加 GBM 路径很便宜）
-   - Touch probability vs Expiry probability
-
-### P3 · 体验/留存
-
-10. **Alerts 系统**：价格、IV、GEX flip 穿越、unusual flow 命中 → email/webhook
-11. **Watchlist 升级**：每个标的展示 IVR/IV30/HV30/Earnings/Flow score 一行
-12. **Compare 模式**：两只票的 IV term / skew / GEX 并排
-13. **导出**：CSV / PNG / 分享只读链接（增长杠杆）
-
-### P4 · 商业化基建
-
-14. **Auth + 订阅**（Stripe Free / Pro $29 / Elite $79）
-15. **Rate limit & 数据延迟分级**：Free 15min delayed、Pro 实时
-16. **Onboarding**：首次进入 3 步引导（选 ticker → 看 GEX → 试 Backtest）
-17. **着陆页 social proof**：使用案例、视频、博客（SEO 拉新）
+下面这套不是再加一个模块，是把现有数据重排成一个**「日内交易者一日循环」**。
 
 ---
 
-## 建议的实施顺序（3 个 milestone）
+## 核心重构：一日循环（Daily Loop）
 
 ```text
-M1  数据深度铺底（2-3 周）
-    └─ IV Rank/Percentile · HV 序列 · Skew · OI Δ · Earnings 日历
-    └─ 新建表 historical_iv / earnings_calendar / oi_snapshot
-    └─ 每日定时 job 入库
+            ┌──────────────────────────────────────────────┐
+            │  ① MORNING BRIEF   你今天该看什么            │
+            │  ② IDEA LAB       买方 setup 扫描器          │
+  开盘 ───▶ │  ③ TRADE BUILDER  「我看多 NVDA 到 230」     │
+            │       → 推荐最优 strike/expiry/结构           │
+            │       → EV · POP · θ/天 · 突破点 · 退出计划   │
+            │  ④ LIVE BOOK      持仓 · 实时 Greeks · alerts │
+            │  ⑤ JOURNAL        自动复盘 · 盲点诊断         │
+            └──────────────────────────────────────────────┘
+```
 
-M2  决策闭环（3-4 周）
-    └─ Unusual Flow 扫描器（实时）+ Alerts
-    └─ Dealer Pack v2（Vanna/Charm/Walls）
-    └─ Strategy Screener
-    └─ Portfolio Tracker
+每一格都是一个新页面 / 重做的页面，但它们**互相串联**——从 Idea 点开就到 Trade Builder，开仓后自动进 Live Book，平仓后自动写 Journal。
 
-M3  商业化（1-2 周）
-    └─ Stripe 订阅 + 套餐门控
-    └─ Onboarding / 着陆页改造 / SEO
-    └─ Alerts 推送（email + webhook）
+---
+
+## 分四个阶段做（按"对你交易最直接有用"排序）
+
+### 阶段 A · 决策支持（4-6 天）—— 解决"买什么 + 选哪个 strike"
+
+**新页面 `/app/idea-lab`** —— 买方专用 setup 扫描器：
+
+按你三种风格各一个 tab：
+
+| Tab | 扫描逻辑 | 输出列 |
+|---|---|---|
+| **Directional · Long Premium** | IV Rank < 30 + 价格动量 + 流动性 OK | 标的 / IV30 / IVR / RSI / 建议 strike & expiry |
+| **Volatility · Pre-Earnings** | 5-30 DTE 有财报 + 当前 IV vs 历史 earnings IV | 标的 / earnings date / IV crush 预期 / straddle 价格 vs 历史 move |
+| **0DTE / Gamma** | 当日 GEX flip 距 spot < 1% + 大 walls + flow 净流向 | 标的 / spot / flip / 最近 wall / flow tape |
+
+**新页面 `/app/trade-builder`**（替代现在的 OptionPricer）—— 输入意图，输出执行：
+
+输入区：
+- "我看 **多/空/中性** [NVDA] 到 [$240] 在 [10] 天内"
+- 风险预算: "$500" / 风险偏好滑块
+
+输出区（自动比较 6-8 种候选结构）：
+- Long Call · Long Call Spread · Diagonal · Calendar · Long Straddle …
+- 每个结构一行：strike/expiry · cost · max profit · max loss · breakeven · **POP** · **Expected Value** · θ/天 · 推荐度 ★
+- **"加入持仓"按钮** → 一键进 Live Book
+
+**升级 GEX 页**：加 0DTE-only 切换 · Gamma Walls 标到 candlestick · Vanna/Charm 副图
+
+### 阶段 B · 持仓管理（5-7 天）—— 解决"何时平仓 / 调仓"
+
+**新页面 `/app/positions`** —— 这是付费用户最看重的：
+
+- **录入方式**（3 种并存）：
+  1. 手动新增（每条 leg）
+  2. **IBKR Flex Query CSV 上传**（IBKR 后台一键导出，零客户端依赖，第一版就够用）
+  3. 从 Trade Builder "加入持仓"自动写入
+- **持仓表**：每行 leg 显示 entry / now / PnL$ / PnL% / Δ / Γ / Θ/天 / Vega / IV 变化 / DTE
+- **组合总览**：净 Δ / 净 Γ / 净 Θ / Beta-weighted Δ（vs SPY） / margin 估算
+- **场景压力**：「SPY -3% + VIX +5」「现价 -5%」「IV +10pp」一键看组合
+- **智能 Alerts**（写入 `alerts` 表，cron 每分钟跑）：
+  - 利润目标命中（默认 50% 最大利润）
+  - 止损线击穿
+  - **θ 加速预警**（DTE < 14 时 θ/天 > 入场时 2 倍）
+  - GEX wall 击穿
+  - IV crash（持仓 IV 单日跌 > 15%）
+  - 推送：站内 + Email（已有 email infra）
+
+### 阶段 C · 复盘 + AI 诊断（3-4 天）—— 让你越用越准
+
+**新页面 `/app/journal`**：
+
+- 平仓自动入库（来源：手动平 / CSV 同步 / Trade Builder）
+- 每笔记录：策略类型 / 入场 IVR / 持有时长 / R 倍数 / 盲点 tag
+- 统计面板：按策略胜率、按 IV 区间胜率、按 DTE 区间胜率、按方向胜率
+- **AI 盲点诊断**（用 Lovable AI）：扫近 50 笔交易，输出："你在 IVR>70 时买入的交易平均亏损 -1.2R，建议避开"
+
+### 阶段 D · IBKR 闭环（2-3 天，可在 B 之后）
+
+IBKR 集成路线分两步走：
+
+| 方案 | 上线难度 | 用户操作 |
+|---|---|---|
+| **v1 · Flex Query CSV** | 1 天 | 在 IBKR 设置 Flex Query → 每天/每周下载 CSV → 上传到 Opti-X |
+| **v2 · IBKR Client Portal Web API** | 1 周 | 用户本地跑 IBKR Gateway → OAuth 授权 → 自动同步（复杂） |
+| 替代 · Tradier API | 半周 | 云端 OAuth，但需要用户也在 Tradier 开户 |
+
+**先做 v1**，等付费用户上来再加 v2。
+
+---
+
+## 同时要做的"基础升级"
+
+这些不是新页面，是给现有模块换骨：
+
+1. **Watchlist 升级为决策面板**：每只票一行展示 `Price · IVR · IV30 · HV30 · Term shape · Flow $ · Earnings in N days`，扫一眼挑标的
+2. **全局 AI 助手升级**：现在的 `GlobalAIChat` 加上"读取当前持仓 + 当前页面数据"的 context，能回答"我现在该不该平 NVDA 240C"
+3. **0DTE 实时模式**：左下角加一个"0DTE Live"开关，开启后所有数据切到 1 分钟刷新 + GEX walls 浮在 candlestick 上
+4. **快捷操作面板**（⌘K）：跳标的、跳页面、复制最后一笔 trade idea
+
+---
+
+## 数据库 / 后端新增
+
+```text
+positions          (id, user_id, status, opened_at, closed_at, legs jsonb, notes)
+position_alerts    (id, user_id, position_id, type, condition, triggered_at, sent)
+trade_journal      (id, user_id, position_id, pnl_r, holding_days, ivr_at_entry, tags[], ai_notes)
+ibkr_imports       (id, user_id, source, filename, parsed jsonb, imported_at)
+catalysts          (ticker, event_type, event_date, source)   — 财报先用免费 yfinance scrape
+ideas_log          (id, ticker, setup_type, score, payload jsonb, created_at)
+
+新边缘函数:
+  scan-buyer-ideas      —— Idea Lab 的扫描器（每 5 分钟 cron）
+  build-trade           —— 给定意图扫 6-8 个结构出推荐
+  evaluate-positions    —— 每分钟跑，检测 alerts
+  import-ibkr-flex      —— 解析 IBKR Flex Query CSV
+  scan-catalysts        —— 每天拉 earnings 日历
+  ai-diagnose-journal   —— 跑 AI 分析复盘记录
 ```
 
 ---
 
-## 技术债 / 上线前必修
+## 实施顺序（我的建议）
 
-- **数据源成本**：Polygon Options Advanced ~$199/mo。要么把成本算进定价，要么加 15min 延迟层降本
-- **缓存层**：现在 compute_cache 是 KV，OI/IV 历史要进真正的时序表（Supabase 直接用 Postgres 即可）
-- **任务调度**：scan-signals 现在是被动触发，需要 cron 每日跑入库
-- **法务**：免责声明、TOS、数据归属（Polygon 要求展示 "Data by Polygon.io"）
-- **可观测**：付费用户的 error 必须有 Sentry 类监控
+```text
+本轮（阶段 A 一半）：
+  1. /app/idea-lab           买方 setup 扫描器（3 个 tab，先只做 Directional）
+  2. /app/trade-builder      意图→结构推荐（核心：EV/POP/退出计划）
+  3. Watchlist 决策面板升级
+  → 这一波完成后，你每天打开就能 "扫 idea → 选结构 → 知道怎么开" 的闭环已经通了
+
+下一轮（阶段 B）：
+  4. /app/positions          手动录入 + 实时 Greeks + 场景压力
+  5. Alerts 系统 + Email 推送
+  6. IBKR Flex Query CSV 导入
+
+第三轮（阶段 A 剩余 + C）：
+  7. Idea Lab · Volatility tab + 0DTE tab
+  8. 0DTE Live 模式 + GEX walls 标注
+  9. /app/journal + AI 盲点诊断
+
+第四轮（收费上线）：
+  10. Stripe 订阅门控 + onboarding
+  11. IBKR Web API v2（可选）
+```
 
 ---
 
-## 我建议下一步
+## 我现在要你确认
 
-挑 **一个 milestone** 我来落地。我的推荐：
+**本轮**就先做"决策闭环"的前 3 件（Idea Lab Directional tab + Trade Builder + Watchlist 升级）——这是最快让你"打开就有用"的一波，大约 1 个 session 的工作量。
 
-1. **先做 M1 数据深度**——它是 M2 所有功能的前提，且能立刻让 Dashboard / Chain / Backtest 显得"专业"。
-2. 或者先做 **Unusual Flow 实时雷达 + Alerts**——这是单点最容易出 demo、最能拉付费的功能。
-
-确认你想优先哪条线，我把它拆成可执行的 plan 再开工。
+确认后我立即开工。或者你想换一波先做（比如直接上 Positions Tracker），告诉我。
