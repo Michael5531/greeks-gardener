@@ -303,59 +303,64 @@ Deno.serve(async (req) => {
       });
     }
 
+    const leg = (type: "call" | "put", side: "long" | "short", strikeTarget: number) => {
+      const live = pickContract(chain, pickExp, type, strikeTarget);
+      return live ? toLeg(live, side) : syntheticLeg(type, side, spot, roundStrike(spot, strikeTarget), pickExp, pickDTE, sigma);
+    };
+
     if (direction === "long") {
       // Long Call ATM
-      const c1 = pickContract(chain, pickExp, "call", spot);
+      const c1 = leg("call", "long", spot);
       pushIf("Long Call (ATM)",
-        [toLeg(c1, "long")],
+        [c1],
         "Unlimited upside, decays fast. Cheapest theta if IV is low.");
 
       // Long Call (Target-strike) — slightly OTM toward target
-      const cTarget = pickContract(chain, pickExp, "call", (spot + target) / 2);
-      if (cTarget?.details?.strike_price !== c1?.details?.strike_price) {
+      const cTarget = leg("call", "long", (spot + target) / 2);
+      if (cTarget?.strike !== c1?.strike) {
         pushIf("Long Call (Near Target)",
-          [toLeg(cTarget, "long")],
+          [cTarget],
           "Lower premium, needs price to move closer to target by expiry.");
       }
 
       // Bull Call Spread: long ATM, short at target
-      const cShort = pickContract(chain, pickExp, "call", target);
-      if (cShort?.details?.strike_price > (c1?.details?.strike_price ?? 0)) {
+      const cShort = leg("call", "short", target);
+      if (cShort && c1 && cShort.strike > c1.strike) {
         pushIf("Bull Call Spread",
-          [toLeg(c1, "long"), toLeg(cShort, "short")],
+          [c1, cShort],
           "Caps profit at target, halves cost and θ-burn vs long call.");
       }
     } else if (direction === "short") {
-      const p1 = pickContract(chain, pickExp, "put", spot);
+      const p1 = leg("put", "long", spot);
       pushIf("Long Put (ATM)",
-        [toLeg(p1, "long")],
+        [p1],
         "Profits as underlying falls. Watch for vol crush after the move.");
 
-      const pTarget = pickContract(chain, pickExp, "put", (spot + target) / 2);
-      if (pTarget?.details?.strike_price !== p1?.details?.strike_price) {
+      const pTarget = leg("put", "long", (spot + target) / 2);
+      if (pTarget?.strike !== p1?.strike) {
         pushIf("Long Put (Near Target)",
-          [toLeg(pTarget, "long")],
+          [pTarget],
           "Cheaper, needs the decline to materialize sooner.");
       }
 
-      const pShort = pickContract(chain, pickExp, "put", target);
-      if (pShort && p1 && pShort.details.strike_price < p1.details.strike_price) {
+      const pShort = leg("put", "short", target);
+      if (pShort && p1 && pShort.strike < p1.strike) {
         pushIf("Bear Put Spread",
-          [toLeg(p1, "long"), toLeg(pShort, "short")],
+          [p1, pShort],
           "Caps profit at target strike, lower cost & θ than naked long put.");
       }
     } else {
       // neutral / volatility
-      const cAtm = pickContract(chain, pickExp, "call", spot);
-      const pAtm = pickContract(chain, pickExp, "put", spot);
+      const cAtm = leg("call", "long", spot);
+      const pAtm = leg("put", "long", spot);
       pushIf("Long Straddle",
-        [toLeg(cAtm, "long"), toLeg(pAtm, "long")],
+        [cAtm, pAtm],
         "Bet on large move either way. Needs IV expansion or big realised vol.");
 
-      const cOTM = pickContract(chain, pickExp, "call", spot * 1.05);
-      const pOTM = pickContract(chain, pickExp, "put", spot * 0.95);
+      const cOTM = leg("call", "long", spot * 1.05);
+      const pOTM = leg("put", "long", spot * 0.95);
       pushIf("Long Strangle",
-        [toLeg(cOTM, "long"), toLeg(pOTM, "long")],
+        [cOTM, pOTM],
         "Cheaper than straddle, needs bigger move to pay off.");
     }
 
