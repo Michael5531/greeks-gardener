@@ -211,6 +211,8 @@ export default function TradeBuilder() {
     });
   }
 
+  const errorMessage = build.error ? (build.error as Error).message : null;
+
   // Auto-build on first load if URL has all params
   useEffect(() => {
     if (ticker && target && days && !build.data && !build.isPending) {
@@ -266,9 +268,15 @@ export default function TradeBuilder() {
         </div>
       </section>
 
-      {build.error && (
-        <div className="border border-destructive/40 text-destructive p-4 text-sm font-mono">
-          {(build.error as Error).message}
+      {errorMessage && (
+        <div className="border border-border bg-secondary/20 text-muted-foreground p-4 text-sm font-mono">
+          {errorMessage}
+        </div>
+      )}
+
+      {result?.fallback && (
+        <div className="border border-primary/30 bg-primary/5 text-primary p-4 text-sm font-mono">
+          {result.warning ?? "实时期权链不可用，当前结果使用理论定价模式生成。"}
         </div>
       )}
 

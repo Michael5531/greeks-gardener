@@ -1,6 +1,6 @@
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { getOptionsChain, getStockBars } from "../_shared/polygon.ts";
-import { bsPrice, N } from "../_shared/blackScholes.ts";
+import { bsPrice, bsGreeks } from "../_shared/blackScholes.ts";
 
 /**
  * Given a directional intent, return a ranked list of candidate option structures
@@ -47,6 +47,49 @@ function daysBetween(a: Date, b: Date) {
 }
 function ymd(d: Date) { return d.toISOString().slice(0, 10); }
 
+function sanitizeProviderError(message: unknown) {
+  const text = typeof message === "string" ? message : "";
+  const lower = text.toLowerCase();
+  if (lower.includes("plan doesn't include") || lower.includes("upgrade your plan") || lower.includes("data timeframe")) {
+    return "当前数据源不支持该时间范围的明细数据，已使用理论定价模式生成策略。";
+  }
+  return text || "策略生成失败，请稍后重试。";
+}
+
+async function yahooSpot(ticker: string): Promise<number | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d&includePrePost=true`;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const d = await r.json().catch(() => ({}));
+    const meta = d?.chart?.result?.[0]?.meta ?? {};
+    return meta.regularMarketPrice ?? meta.previousClose ?? meta.chartPreviousClose ?? null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function hvFromBars(bars: any[]) {
+  const closes = bars.map((b) => Number(b.c)).filter((v) => Number.isFinite(v) && v > 0);
+  if (closes.length < 12) return null;
+  const rets: number[] = [];
+  for (let i = 1; i < closes.length; i++) rets.push(Math.log(closes[i] / closes[i - 1]));
+  const mean = rets.reduce((s, x) => s + x, 0) / rets.length;
+  const variance = rets.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, rets.length - 1);
+  return Math.sqrt(variance) * Math.sqrt(252);
+}
+
+function nextFridayAfter(days: number) {
+  const d = new Date(Date.now() + Math.max(1, days) * 86_400_000);
+  const add = (5 - d.getUTCDay() + 7) % 7;
+  d.setUTCDate(d.getUTCDate() + add);
+  return ymd(d);
+}
+
+function roundStrike(spot: number, strike: number) {
+  const step = spot < 50 ? 1 : spot < 200 ? 2.5 : spot < 500 ? 5 : 10;
+  return Math.max(step, Math.round(strike / step) * step);
+}
+
 function midOf(c: any): number | null {
   const b = c?.last_quote?.bid ?? c?.day?.low;
   const a = c?.last_quote?.ask ?? c?.day?.high;
@@ -84,6 +127,13 @@ function toLeg(c: any, side: "long" | "short"): Leg | null {
     delta: c.greeks?.delta ?? 0,
     theta: c.greeks?.theta ?? 0,
   };
+}
+
+function syntheticLeg(type: "call" | "put", side: "long" | "short", spot: number, strike: number, exp: string, dte: number, iv: number): Leg {
+  const T = Math.max(dte, 1) / 365;
+  const mid = Math.max(0.01, bsPrice(spot, strike, T, 0.045, iv, type));
+  const g = bsGreeks(spot, strike, T, 0.045, iv, type);
+  return { type, side, strike, expiration: exp, iv, mid, delta: g.delta, theta: g.theta };
 }
 
 function payoffAt(S: number, legs: Leg[]): number {
@@ -181,17 +231,21 @@ Deno.serve(async (req) => {
     const target = Number(body.target);
     const days = Math.max(1, Math.min(180, Number(body.days) || 14));
     const budget = body.budget ? Number(body.budget) : null;
-    if (!ticker || !Number.isFinite(target)) return json({ error: "ticker & target required" }, 400);
+    if (!ticker || !Number.isFinite(target)) return json({ error: "ticker & target required", fallback: true, structures: [] });
 
     // 1) get spot
     const today = new Date();
     const from = new Date(today.getTime() - 30 * 86_400_000);
-    const bars = await getStockBars(ticker, ymd(from), ymd(today));
-    const spot = bars.length ? bars[bars.length - 1].c : null;
-    if (!spot) return json({ error: "no spot" }, 400);
+    const bars = await getStockBars(ticker, ymd(from), ymd(today)).catch(() => []);
+    const spot = bars.length ? bars[bars.length - 1].c : await yahooSpot(ticker);
+    if (!spot) return json({ error: "无法获取标的价格，请稍后重试。", fallback: true, structures: [] });
 
     // 2) chain
-    const rawChain = await getOptionsChain(ticker);
+    let providerWarning: string | null = null;
+    const rawChain = await getOptionsChain(ticker).catch((e) => {
+      providerWarning = sanitizeProviderError(e instanceof Error ? e.message : String(e));
+      return [];
+    });
     const chain = rawChain.filter((c: any) => c?.details?.ticker?.startsWith(`O:${ticker}`));
 
     // 3) pick expiration: nearest exp with DTE >= days, fallback to closest
@@ -202,11 +256,12 @@ Deno.serve(async (req) => {
       if (!expSet.has(e)) expSet.set(e, daysBetween(today, new Date(e + "T00:00:00Z")));
     }
     const expArr = Array.from(expSet.entries()).filter(([, d]) => d >= 1).sort((a, b) => a[1] - b[1]);
-    if (!expArr.length) return json({ error: "no expirations available" }, 400);
-    const pickExp =
-      expArr.find(([, d]) => d >= days)?.[0]
-      ?? expArr.sort((a, b) => Math.abs(a[1] - days) - Math.abs(b[1] - days))[0][0];
-    const pickDTE = expSet.get(pickExp)!;
+    const hasLiveChain = expArr.length > 0;
+    const pickExp = hasLiveChain
+      ? (expArr.find(([, d]) => d >= days)?.[0]
+        ?? expArr.sort((a, b) => Math.abs(a[1] - days) - Math.abs(b[1] - days))[0][0])
+      : nextFridayAfter(days);
+    const pickDTE = hasLiveChain ? expSet.get(pickExp)! : daysBetween(today, new Date(pickExp + "T00:00:00Z"));
 
     // IV30 estimate from chain (ATM avg)
     const atmBand = chain.filter((c: any) =>
@@ -217,7 +272,8 @@ Deno.serve(async (req) => {
     const iv30 = atmBand.length
       ? +(atmBand.reduce((s, c) => s + c.implied_volatility, 0) / atmBand.length).toFixed(4)
       : null;
-    const sigma = iv30 ?? 0.4;
+    const fallbackIv = Math.min(1.2, Math.max(0.18, hvFromBars(bars) ?? 0.4));
+    const sigma = iv30 ?? fallbackIv;
 
     const structures: Structure[] = [];
 
@@ -247,59 +303,64 @@ Deno.serve(async (req) => {
       });
     }
 
+    const leg = (type: "call" | "put", side: "long" | "short", strikeTarget: number) => {
+      const live = pickContract(chain, pickExp, type, strikeTarget);
+      return live ? toLeg(live, side) : syntheticLeg(type, side, spot, roundStrike(spot, strikeTarget), pickExp, pickDTE, sigma);
+    };
+
     if (direction === "long") {
       // Long Call ATM
-      const c1 = pickContract(chain, pickExp, "call", spot);
+      const c1 = leg("call", "long", spot);
       pushIf("Long Call (ATM)",
-        [toLeg(c1, "long")],
+        [c1],
         "Unlimited upside, decays fast. Cheapest theta if IV is low.");
 
       // Long Call (Target-strike) — slightly OTM toward target
-      const cTarget = pickContract(chain, pickExp, "call", (spot + target) / 2);
-      if (cTarget?.details?.strike_price !== c1?.details?.strike_price) {
+      const cTarget = leg("call", "long", (spot + target) / 2);
+      if (cTarget?.strike !== c1?.strike) {
         pushIf("Long Call (Near Target)",
-          [toLeg(cTarget, "long")],
+          [cTarget],
           "Lower premium, needs price to move closer to target by expiry.");
       }
 
       // Bull Call Spread: long ATM, short at target
-      const cShort = pickContract(chain, pickExp, "call", target);
-      if (cShort?.details?.strike_price > (c1?.details?.strike_price ?? 0)) {
+      const cShort = leg("call", "short", target);
+      if (cShort && c1 && cShort.strike > c1.strike) {
         pushIf("Bull Call Spread",
-          [toLeg(c1, "long"), toLeg(cShort, "short")],
+          [c1, cShort],
           "Caps profit at target, halves cost and θ-burn vs long call.");
       }
     } else if (direction === "short") {
-      const p1 = pickContract(chain, pickExp, "put", spot);
+      const p1 = leg("put", "long", spot);
       pushIf("Long Put (ATM)",
-        [toLeg(p1, "long")],
+        [p1],
         "Profits as underlying falls. Watch for vol crush after the move.");
 
-      const pTarget = pickContract(chain, pickExp, "put", (spot + target) / 2);
-      if (pTarget?.details?.strike_price !== p1?.details?.strike_price) {
+      const pTarget = leg("put", "long", (spot + target) / 2);
+      if (pTarget?.strike !== p1?.strike) {
         pushIf("Long Put (Near Target)",
-          [toLeg(pTarget, "long")],
+          [pTarget],
           "Cheaper, needs the decline to materialize sooner.");
       }
 
-      const pShort = pickContract(chain, pickExp, "put", target);
-      if (pShort && p1 && pShort.details.strike_price < p1.details.strike_price) {
+      const pShort = leg("put", "short", target);
+      if (pShort && p1 && pShort.strike < p1.strike) {
         pushIf("Bear Put Spread",
-          [toLeg(p1, "long"), toLeg(pShort, "short")],
+          [p1, pShort],
           "Caps profit at target strike, lower cost & θ than naked long put.");
       }
     } else {
       // neutral / volatility
-      const cAtm = pickContract(chain, pickExp, "call", spot);
-      const pAtm = pickContract(chain, pickExp, "put", spot);
+      const cAtm = leg("call", "long", spot);
+      const pAtm = leg("put", "long", spot);
       pushIf("Long Straddle",
-        [toLeg(cAtm, "long"), toLeg(pAtm, "long")],
+        [cAtm, pAtm],
         "Bet on large move either way. Needs IV expansion or big realised vol.");
 
-      const cOTM = pickContract(chain, pickExp, "call", spot * 1.05);
-      const pOTM = pickContract(chain, pickExp, "put", spot * 0.95);
+      const cOTM = leg("call", "long", spot * 1.05);
+      const pOTM = leg("put", "long", spot * 0.95);
       pushIf("Long Strangle",
-        [toLeg(cOTM, "long"), toLeg(pOTM, "long")],
+        [cOTM, pOTM],
         "Cheaper than straddle, needs bigger move to pay off.");
     }
 
@@ -315,12 +376,12 @@ Deno.serve(async (req) => {
 
     return json({
       ticker, spot, direction, target, days, expiration: pickExp, dte: pickDTE,
-      iv30, sigmaUsed: sigma,
+      iv30, sigmaUsed: sigma, fallback: !hasLiveChain, warning: providerWarning,
       structures: filtered,
       considered: structures.length,
       computed_at: new Date().toISOString(),
     });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return json({ error: sanitizeProviderError(e instanceof Error ? e.message : String(e)), fallback: true, structures: [] });
   }
 });
