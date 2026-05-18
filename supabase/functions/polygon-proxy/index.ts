@@ -368,7 +368,7 @@ Deno.serve(async (req) => {
           safeCachedPolygon(`hist-stock:${underlying}|${from}|${to}`, ttl, stockTarget),
         ]);
         let optionBars = optionR.data?.results ?? [];
-        const messages = [optionR.data?.message ?? optionR.data?.error, stockR.data?.message ?? stockR.data?.error].filter(Boolean);
+        const messages = publicMessages(optionR.data?.message ?? optionR.data?.error, stockR.data?.message ?? stockR.data?.error);
         let source = "aggs";
         if (optionBars.length < 30) {
           const quoteDaily = await optionQuoteDailyBars(option_ticker, from, to, apiKey, ttl);
@@ -424,7 +424,7 @@ Deno.serve(async (req) => {
           quotes: quoteR.data?.results ?? [],
           underlying_minutes: minuteR.data?.results ?? [],
           fallback: quoteR.status >= 400 || minuteR.status >= 400,
-          messages: [quoteR.data?.message ?? quoteR.data?.error, minuteR.data?.message ?? minuteR.data?.error].filter(Boolean),
+          messages: publicMessages(quoteR.data?.message ?? quoteR.data?.error, minuteR.data?.message ?? minuteR.data?.error),
         });
       }
       case "option-snapshot-single": {
