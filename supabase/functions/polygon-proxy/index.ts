@@ -378,12 +378,28 @@ Deno.serve(async (req) => {
             messages.push(`期权聚合日K只有 ${optionR.data?.results?.length ?? 0} 根，已用历史 bid/ask mid 重建为 ${quoteDaily.bars.length} 根日K`);
           }
         }
+        let stockBars: any[] = stockR.data?.results ?? [];
+        if (stockBars.length === 0) {
+          try {
+            const period1 = Math.floor(new Date(from).getTime() / 1000);
+            const period2 = Math.floor(new Date(to).getTime() / 1000) + 86400;
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(underlying)}?period1=${period1}&period2=${period2}&interval=1d&includePrePost=false`;
+            const yKey = `yhist-stock:${underlying}|${from}|${to}`;
+            const yr = await cachedFetchJson(yKey, ttl, async () => {
+              const rr = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+              const jj = await rr.json().catch(() => ({}));
+              return { data: jj, status: rr.status };
+            });
+            const yBars = yahooBarsFromChart(yr.data?.chart?.result?.[0]);
+            if (yBars.length > 0) stockBars = yBars;
+          } catch (_) { /* leave empty */ }
+        }
         return json({
           status: "OK",
           option: optionBars,
-          underlying: stockR.data?.results ?? [],
+          underlying: stockBars,
           option_source: source,
-          fallback: optionR.status >= 400 || stockR.status >= 400,
+          fallback: optionR.status >= 400 || stockR.status >= 400 || (stockR.data?.results?.length ?? 0) === 0,
           messages,
         });
       }
