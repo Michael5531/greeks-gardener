@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   Activity, BarChart3, Boxes, History, Layers, LayoutDashboard,
-  LineChart, LogOut, Radar, ChevronsLeft, ChevronsRight,
+  LineChart, LogOut, Radar, ChevronsLeft, ChevronsRight, Sigma,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MarketStatusBar from "./MarketStatusBar";
@@ -45,6 +45,7 @@ export default function AppLayout() {
       items: [
         { to: "/app/greeks", label: t.nav.greeks, icon: Activity },
         { to: "/app/gex", label: t.nav.gex, icon: BarChart3 },
+        { to: "/app/iv-lab", label: t.nav.ivLab, icon: Sigma },
       ],
     },
     {
