@@ -44,7 +44,8 @@ All colors MUST be HSL.
 
     --radius: 0.375rem;
 
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-numeric: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-display: 'Space Grotesk', system-ui, sans-serif;
     --font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
 
@@ -161,9 +162,18 @@ All colors MUST be HSL.
     }
   }
 
-  .font-mono, code, .tabular-nums {
+  .font-mono, code, .tabular-nums, .font-numeric {
     font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-feature-settings: "tnum" 1, "zero" 1, "ss02" 1, "cv01" 1;
+    letter-spacing: -0.01em;
+  }
+
+  /* Professional financial numerics — slightly tighter, slashed zero,
+     tabular alignment. Applied to every element classed for numeric display. */
+  .font-numeric {
+    font-weight: 500;
+    font-variant-ligatures: none;
   }
 }
 
