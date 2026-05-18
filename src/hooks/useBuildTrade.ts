@@ -37,6 +37,15 @@ export interface BuildTradeResult {
   iv30: number | null;
   structures: BuiltStructure[];
   computed_at: string;
+  fallback?: boolean;
+  warning?: string | null;
+}
+
+function friendlyEdgeError(message: string) {
+  if (message.includes("non-2xx") || message.includes("FunctionsHttpError")) {
+    return "策略生成服务暂时不可用；请重试一次，系统会使用理论定价模式兜底。";
+  }
+  return message;
 }
 
 export function useBuildTrade() {
@@ -49,8 +58,8 @@ export function useBuildTrade() {
       budget?: number | null;
     }) => {
       const { data, error } = await supabase.functions.invoke("build-trade", { body: input });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (error) throw new Error(friendlyEdgeError(error.message ?? "Build failed"));
+      if ((data as any)?.error) throw new Error(friendlyEdgeError((data as any).error));
       return data as BuildTradeResult;
     },
   });
