@@ -1,6 +1,6 @@
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { getOptionsChain, getStockBars } from "../_shared/polygon.ts";
-import { bsPrice, bsGreeks, N } from "../_shared/blackScholes.ts";
+import { bsPrice, bsGreeks } from "../_shared/blackScholes.ts";
 
 /**
  * Given a directional intent, return a ranked list of candidate option structures
@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
     const target = Number(body.target);
     const days = Math.max(1, Math.min(180, Number(body.days) || 14));
     const budget = body.budget ? Number(body.budget) : null;
-    if (!ticker || !Number.isFinite(target)) return json({ error: "ticker & target required" }, 400);
+    if (!ticker || !Number.isFinite(target)) return json({ error: "ticker & target required", fallback: true, structures: [] });
 
     // 1) get spot
     const today = new Date();
