@@ -345,7 +345,7 @@ export default function OptionQuoteHistory({
 
           <TabsContent value="intraday" className="space-y-3">
             <ChartCard title="Bid / Ask / Mid（当日）" height={300}>
-              {error && <div className="p-4 text-xs text-destructive">{error}</div>}
+              {error && <div className="grid h-full place-items-center px-4 text-center text-xs text-muted-foreground">{error}</div>}
               {!error && !loading && chartData.length === 0 && (
                 <div className="grid h-full place-items-center text-xs text-muted-foreground">该日无报价数据</div>
               )}
