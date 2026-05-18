@@ -236,12 +236,16 @@ Deno.serve(async (req) => {
     // 1) get spot
     const today = new Date();
     const from = new Date(today.getTime() - 30 * 86_400_000);
-    const bars = await getStockBars(ticker, ymd(from), ymd(today));
-    const spot = bars.length ? bars[bars.length - 1].c : null;
-    if (!spot) return json({ error: "no spot" }, 400);
+    const bars = await getStockBars(ticker, ymd(from), ymd(today)).catch(() => []);
+    const spot = bars.length ? bars[bars.length - 1].c : await yahooSpot(ticker);
+    if (!spot) return json({ error: "无法获取标的价格，请稍后重试。", fallback: true, structures: [] });
 
     // 2) chain
-    const rawChain = await getOptionsChain(ticker);
+    let providerWarning: string | null = null;
+    const rawChain = await getOptionsChain(ticker).catch((e) => {
+      providerWarning = sanitizeProviderError(e instanceof Error ? e.message : String(e));
+      return [];
+    });
     const chain = rawChain.filter((c: any) => c?.details?.ticker?.startsWith(`O:${ticker}`));
 
     // 3) pick expiration: nearest exp with DTE >= days, fallback to closest
@@ -252,11 +256,12 @@ Deno.serve(async (req) => {
       if (!expSet.has(e)) expSet.set(e, daysBetween(today, new Date(e + "T00:00:00Z")));
     }
     const expArr = Array.from(expSet.entries()).filter(([, d]) => d >= 1).sort((a, b) => a[1] - b[1]);
-    if (!expArr.length) return json({ error: "no expirations available" }, 400);
-    const pickExp =
-      expArr.find(([, d]) => d >= days)?.[0]
-      ?? expArr.sort((a, b) => Math.abs(a[1] - days) - Math.abs(b[1] - days))[0][0];
-    const pickDTE = expSet.get(pickExp)!;
+    const hasLiveChain = expArr.length > 0;
+    const pickExp = hasLiveChain
+      ? (expArr.find(([, d]) => d >= days)?.[0]
+        ?? expArr.sort((a, b) => Math.abs(a[1] - days) - Math.abs(b[1] - days))[0][0])
+      : nextFridayAfter(days);
+    const pickDTE = hasLiveChain ? expSet.get(pickExp)! : daysBetween(today, new Date(pickExp + "T00:00:00Z"));
 
     // IV30 estimate from chain (ATM avg)
     const atmBand = chain.filter((c: any) =>
@@ -267,7 +272,8 @@ Deno.serve(async (req) => {
     const iv30 = atmBand.length
       ? +(atmBand.reduce((s, c) => s + c.implied_volatility, 0) / atmBand.length).toFixed(4)
       : null;
-    const sigma = iv30 ?? 0.4;
+    const fallbackIv = Math.min(1.2, Math.max(0.18, hvFromBars(bars) ?? 0.4));
+    const sigma = iv30 ?? fallbackIv;
 
     const structures: Structure[] = [];
 
