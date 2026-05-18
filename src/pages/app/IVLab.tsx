@@ -61,7 +61,7 @@ export default function IVLab() {
         subtitle="隐含波动率结构、历史波动率对比、偏度与 IV Rank。"
         actions={
           <div className="w-[360px]">
-            <TickerSearch onSelected={t => setTicker(t)} />
+            <TickerSearch current={ticker || undefined} onSelect={t => setTicker(t.ticker)} />
           </div>
         }
       />
