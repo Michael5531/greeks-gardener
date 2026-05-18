@@ -1,79 +1,130 @@
-以一名专业 UI/UX 设计师视角，对当前 OPTI-X 落地页做一次评审，并给出按优先级排序的改进项。整体方向是好的——深色金融终端 + 青绿 / 紫的双色调、Space Grotesk 大字标题、模块化栅格——已经具备 Bloomberg / Linear 那种"专业冷感"。但还有几处会拉低专业感与转化率的问题。
+## 现状盘点
 
-## 一、最影响第一印象的问题（P0）
+你现在已经覆盖的能力（基于 8 个 app 页面 + 14 个 edge function）：
 
-1. Hero 排版断行不自然
-   - "看见 市场 / 在它 出手前。" 现在的换行让 "在它" 单独成行、视觉上像孤字，破坏了节奏。
-   - 建议：调整为「看见市场 / 在它出手前。」两行结构，"市场" 用青绿描边或渐变高亮；或用一行 + 副标语形式。中文标题不应像英文那样按词换行。
+- **行情/链**：Overview · Chain · Orderbook · Flow（历史期权流）
+- **分析**：3D Greeks · GEX（含 flip 点）· IV Surface
+- **策略**：多腿 Builder + Pricer + Payoff + Backtest（含 custom legs）+ Signals 扫描
+- **AI**：ai-chat、analyze-gex
+- **基础设施**：Polygon 代理、computed cache、react-query 共享缓存
 
-2. Hero 与右侧 mock chart 信息密度失衡
-   - 左边大字标题 + 一段长说明 + 两个按钮，右边一个迷你 GEX 卡片，留白巨大但缺乏"产品力证据"。
-   - 建议：把右侧 mock 卡片做成可轮播的 3 张（GEX / 3D Greeks / Order Flow），每 4s 切换；或直接嵌入一个真实的 live 微型终端预览，立刻传达"这是一个工具，不是营销页"。
-
-3. 顶部 Ticker Tape 颜色过暗
-   - 当前 ticker 行几乎与背景同色，对比度不足（WCAG AA 不达标），让"实时数据"这个卖点反而被弱化。
-   - 建议：行高 +4px，文字提亮到 foreground/80，涨跌色用 bull/bear token 的 saturated 版本，整条加 1px 顶/底 border 与背景区隔。
-
-## 二、信息架构与转化（P1）
-
-4. 缺少"它解决什么问题"的钩子
-   - 现在直接跳到模块罗列。专业交易员需要先看到 "为什么我需要这个" 的对比叙事（vs Tradingview / vs 看券商软件）。
-   - 建议：在 Hero 之后、模块之前加一段 "Before / After" 或 "传统 vs OPTI-X" 的对比块。
-
-5. 8K+ / 1M+ / <120ms / 24/7 这组数字太"营销化"且无上下文
-   - 数字之间无视觉层级、无图标、无 tooltip 说明来源，会被专业用户视为水分。
-   - 建议：每个数字加一个 16px 单色图标 + 一行 "source: Polygon.io" 之类的脚注；或干脆把这块换成实时滚动的"今日已处理合约数"等动态数字（更有说服力）。
-
-6. 6 个模块卡片同质化严重
-   - 6 张卡布局、字号、留白完全相同，眼睛没有落点，扫读时无法快速分辨主次。
-   - 建议：采用 Bento 网格——把 "3D Greeks" 和 "GEX 微观结构" 做成 2x 大卡（带小预览图/动画），其余 4 个保持当前小卡尺寸。同时给每张卡加 hover 时的 micro-preview。
-
-7. CTA 重复且层级模糊
-   - 顶部右上、Hero、底部都是 "进入终端"，但视觉权重几乎一致；"开始使用" 与 "进入终端" 文案不统一。
-   - 建议：统一为 "进入终端 →"，并明确主 CTA（Hero + 底 banner 用 filled primary）vs 次 CTA（导航用 ghost）。
-
-## 三、视觉细节（P2）
-
-8. 全站只有一个青绿强调色，紫色 accent 几乎没用上
-   - index.css 里定义了 --accent: 280 85% 65%，但页面上只在底部 banner 背景出现一次，浪费了双色系统。
-   - 建议：在 Hero "市场" 二字、模块编号 06、数字 stats 上引入紫→青的渐变，让品牌色系真正成立。
-
-9. 字体层级偏单一
-   - 所有正文都用 Space Grotesk；数字本应是 JetBrains Mono（项目已定义 --font-mono），但 hero 下方的 8K+ / 1M+ 看起来仍是 display 字体。
-   - 建议：所有数值（含 ticker、stats、模块编号 01-06）强制走 font-mono + tabular-nums，立刻拉出"终端感"。
-
-10. 模块卡缺少 hover 反馈
-    - 现在悬停几乎无变化，对一个声称"专业终端"的产品而言显得静态。
-    - 建议：hover 时 border 渐变到 primary、轻微 translateY(-2px)、右上角箭头滑入。
-
-11. 底部 "把直觉，升级为系统" banner 的紫色渐变与上方风格脱节
-    - 是整页唯一的紫色大色块，突兀。
-    - 建议：保留渐变但降低饱和度 30%，并在卡内加一条细的网格线纹理（grid-bg utility 已有），与整体终端语言统一。
-
-12. Footer 信息太薄
-    - 只有版权和两行免责声明，缺少导航复用、社媒、状态页、文档入口。
-    - 建议：3 列 footer：产品 / 公司 / 法务 + 一行 "System status · API · Docs"。
-
-## 四、可访问性与响应式（P2）
-
-13. 中英文切换按钮 "中文 / EN" 视觉是两个独立按钮，但其实是单选——应使用 segmented control 形式（已选项有 background 高亮）。
-14. Hero 大字 (~120px) 在 768-1024 区间会溢出，需要 clamp(48px, 8vw, 120px)。
-15. ticker tape 在移动端是横向 scroll 还是省略？需要确认无横向溢出。
-16. 全站缺少 prefers-reduced-motion 处理（如果加入轮播 / 动画后要补）。
-
-## 五、SEO / Meta（P3）
-
-17. 检查 index.html 的 title / description / og:image 是否针对落地页做了优化；目前的 hero "看见市场，在它出手前" 是绝佳 tagline，应同步进 meta。
+定位类比：介于 **Unusual Whales 入门版** 和 **OptionStrat / Market Chameleon** 之间，但缺少"投资者真正会续费"的几个支柱模块。
 
 ---
 
-## 建议落地顺序
+## 与付费终端（UW $48/mo、Market Chameleon $69/mo、OptionStrat $19/mo、SpotGamma $99/mo）的差距
+
+按"对续费影响最大 → 最小"排列：
+
+### P0 · 决策闭环（最缺，直接影响付费意愿）
+
+1. **Unusual Options Activity / Smart Flow 实时雷达**
+   你现在只有"历史 flow"。差距：
+   - 实时（或 15 分钟延迟）大单扫描：volume > X×OI、premium > $50k、sweep/block/split 分类
+   - "Repeat hitter"：同一 contract 当日多次扫到
+   - 推送：邮件 / Webhook / Discord
+   - 这是 UW 最贵也最有黏性的功能
+
+2. **Earnings & Catalyst 中心**
+   - 财报日历 + 隐含波动 vs 历史已实现波动差（IV Crush 预测）
+   - 财报前后 straddle 历史回报表
+   - Ex-div、FOMC、CPI 事件叠加到 IV term structure
+   - 现在 Backtest 没法回答"NVDA 财报前买 ATM straddle 历史胜率"
+
+3. **Dealer Positioning Pack（SpotGamma 杀手锏）**
+   你已有 GEX flip，差距：
+   - **Vanna / Charm exposure**（VEX / CEX）按 strike
+   - **Dealer 0DTE 持仓** 单独剖析
+   - **Gamma walls / Call & Put walls** 标注到当日 chart
+   - **HIRO 类** 资金流向时间序列
+
+### P1 · 数据深度（让分析"可信"）
+
+4. **历史 IV / HV 数据库**
+   - IV Rank、IV Percentile（30/60/90/252 天）—— 选 strategy 的前提
+   - HV20 / HV30 / HV60 与 IV30 的 spread 时间序列
+   - Term structure 历史快照（今天 vs 30 天前）
+
+5. **Skew & Smile 量化**
+   - 25Δ Risk Reversal、Butterfly
+   - Put/Call skew 时间序列
+   - Skew percentile rank（"现在 skew 比过去一年 X% 时间更陡"）
+
+6. **持仓变化（OI Δ）**
+   - 每日 OI delta by strike/exp（区分 open vs close）
+   - 大单 OI 异动榜
+   - 现在 chain 只能看 snapshot
+
+### P2 · 策略层（变现钩子）
+
+7. **Strategy Screener / Idea Lab**
+   - 全市场扫："找 IVR>70 + 财报 30 天外 + 流动性好的 short strangle 候选"
+   - 输出 expected return、POP、breakeven、margin
+   - 对标 Market Chameleon Trade Ideas
+
+8. **Portfolio / Positions Tracker**
+   - 用户录入持仓 → 实时净 Greeks、Beta-weighted Delta、margin、PnL attribution
+   - "如果 SPY -3% + VIX +5"压力测试
+   - 这是付费用户从"看"到"用"的关键
+
+9. **Probability Lab**
+   - 基于 IV 的 POP / P50 / Expected Value
+   - Monte Carlo 路径模拟（你已有 BS，加 GBM 路径很便宜）
+   - Touch probability vs Expiry probability
+
+### P3 · 体验/留存
+
+10. **Alerts 系统**：价格、IV、GEX flip 穿越、unusual flow 命中 → email/webhook
+11. **Watchlist 升级**：每个标的展示 IVR/IV30/HV30/Earnings/Flow score 一行
+12. **Compare 模式**：两只票的 IV term / skew / GEX 并排
+13. **导出**：CSV / PNG / 分享只读链接（增长杠杆）
+
+### P4 · 商业化基建
+
+14. **Auth + 订阅**（Stripe Free / Pro $29 / Elite $79）
+15. **Rate limit & 数据延迟分级**：Free 15min delayed、Pro 实时
+16. **Onboarding**：首次进入 3 步引导（选 ticker → 看 GEX → 试 Backtest）
+17. **着陆页 social proof**：使用案例、视频、博客（SEO 拉新）
+
+---
+
+## 建议的实施顺序（3 个 milestone）
 
 ```text
-Sprint 1 (P0, ~半天)    : #1 Hero 排版 + #3 ticker 对比度 + #9 数字字体 mono
-Sprint 2 (P1, ~1天)     : #6 Bento 模块卡 + #5 stats 重做 + #7 CTA 统一
-Sprint 3 (P1-P2, ~1天)  : #2 Hero 右侧轮播 + #8 紫色 accent 引入 + #10 hover 动效
-Sprint 4 (P2-P3)        : #4 对比叙事段 + #11 banner 调色 + #12 footer 扩展 + #13-17
+M1  数据深度铺底（2-3 周）
+    └─ IV Rank/Percentile · HV 序列 · Skew · OI Δ · Earnings 日历
+    └─ 新建表 historical_iv / earnings_calendar / oi_snapshot
+    └─ 每日定时 job 入库
+
+M2  决策闭环（3-4 周）
+    └─ Unusual Flow 扫描器（实时）+ Alerts
+    └─ Dealer Pack v2（Vanna/Charm/Walls）
+    └─ Strategy Screener
+    └─ Portfolio Tracker
+
+M3  商业化（1-2 周）
+    └─ Stripe 订阅 + 套餐门控
+    └─ Onboarding / 着陆页改造 / SEO
+    └─ Alerts 推送（email + webhook）
 ```
 
-如果你认可这个方向，我可以从 Sprint 1 开始落地——也可以告诉我你最想先动哪一块，或者希望我先就 Hero 出 2-3 套视觉方案给你挑。
+---
+
+## 技术债 / 上线前必修
+
+- **数据源成本**：Polygon Options Advanced ~$199/mo。要么把成本算进定价，要么加 15min 延迟层降本
+- **缓存层**：现在 compute_cache 是 KV，OI/IV 历史要进真正的时序表（Supabase 直接用 Postgres 即可）
+- **任务调度**：scan-signals 现在是被动触发，需要 cron 每日跑入库
+- **法务**：免责声明、TOS、数据归属（Polygon 要求展示 "Data by Polygon.io"）
+- **可观测**：付费用户的 error 必须有 Sentry 类监控
+
+---
+
+## 我建议下一步
+
+挑 **一个 milestone** 我来落地。我的推荐：
+
+1. **先做 M1 数据深度**——它是 M2 所有功能的前提，且能立刻让 Dashboard / Chain / Backtest 显得"专业"。
+2. 或者先做 **Unusual Flow 实时雷达 + Alerts**——这是单点最容易出 demo、最能拉付费的功能。
+
+确认你想优先哪条线，我把它拆成可执行的 plan 再开工。
