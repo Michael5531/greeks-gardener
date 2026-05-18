@@ -376,12 +376,12 @@ Deno.serve(async (req) => {
 
     return json({
       ticker, spot, direction, target, days, expiration: pickExp, dte: pickDTE,
-      iv30, sigmaUsed: sigma,
+      iv30, sigmaUsed: sigma, fallback: !hasLiveChain, warning: providerWarning,
       structures: filtered,
       considered: structures.length,
       computed_at: new Date().toISOString(),
     });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return json({ error: sanitizeProviderError(e instanceof Error ? e.message : String(e)), fallback: true, structures: [] });
   }
 });
