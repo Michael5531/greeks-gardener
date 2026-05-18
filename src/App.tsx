@@ -18,6 +18,8 @@ import Signals from "./pages/app/Signals.tsx";
 import Orderbook from "./pages/app/Orderbook.tsx";
 import Flow from "./pages/app/Flow.tsx";
 import IVLab from "./pages/app/IVLab.tsx";
+import IdeaLab from "./pages/app/IdeaLab.tsx";
+import TradeBuilder from "./pages/app/TradeBuilder.tsx";
 import { LanguageProvider } from "./i18n";
 import { ThemeProvider } from "./hooks/useTheme";
 
@@ -45,6 +47,8 @@ const App = () => (
               <Route path="iv-lab" element={<IVLab />} />
               <Route path="backtest" element={<Backtest />} />
               <Route path="signals" element={<Signals />} />
+              <Route path="idea-lab" element={<IdeaLab />} />
+              <Route path="trade-builder" element={<TradeBuilder />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
