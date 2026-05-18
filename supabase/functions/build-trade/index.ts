@@ -1,6 +1,6 @@
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { getOptionsChain, getStockBars } from "../_shared/polygon.ts";
-import { bsPrice, N } from "../_shared/blackScholes.ts";
+import { bsPrice, bsGreeks, N } from "../_shared/blackScholes.ts";
 
 /**
  * Given a directional intent, return a ranked list of candidate option structures
@@ -46,6 +46,49 @@ function daysBetween(a: Date, b: Date) {
   return Math.max(0, Math.round((b.getTime() - a.getTime()) / 86_400_000));
 }
 function ymd(d: Date) { return d.toISOString().slice(0, 10); }
+
+function sanitizeProviderError(message: unknown) {
+  const text = typeof message === "string" ? message : "";
+  const lower = text.toLowerCase();
+  if (lower.includes("plan doesn't include") || lower.includes("upgrade your plan") || lower.includes("data timeframe")) {
+    return "当前数据源不支持该时间范围的明细数据，已使用理论定价模式生成策略。";
+  }
+  return text || "策略生成失败，请稍后重试。";
+}
+
+async function yahooSpot(ticker: string): Promise<number | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d&includePrePost=true`;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const d = await r.json().catch(() => ({}));
+    const meta = d?.chart?.result?.[0]?.meta ?? {};
+    return meta.regularMarketPrice ?? meta.previousClose ?? meta.chartPreviousClose ?? null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function hvFromBars(bars: any[]) {
+  const closes = bars.map((b) => Number(b.c)).filter((v) => Number.isFinite(v) && v > 0);
+  if (closes.length < 12) return null;
+  const rets: number[] = [];
+  for (let i = 1; i < closes.length; i++) rets.push(Math.log(closes[i] / closes[i - 1]));
+  const mean = rets.reduce((s, x) => s + x, 0) / rets.length;
+  const variance = rets.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, rets.length - 1);
+  return Math.sqrt(variance) * Math.sqrt(252);
+}
+
+function nextFridayAfter(days: number) {
+  const d = new Date(Date.now() + Math.max(1, days) * 86_400_000);
+  const add = (5 - d.getUTCDay() + 7) % 7;
+  d.setUTCDate(d.getUTCDate() + add);
+  return ymd(d);
+}
+
+function roundStrike(spot: number, strike: number) {
+  const step = spot < 50 ? 1 : spot < 200 ? 2.5 : spot < 500 ? 5 : 10;
+  return Math.max(step, Math.round(strike / step) * step);
+}
 
 function midOf(c: any): number | null {
   const b = c?.last_quote?.bid ?? c?.day?.low;
