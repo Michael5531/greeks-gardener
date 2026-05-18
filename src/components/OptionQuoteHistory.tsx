@@ -26,6 +26,20 @@ function isoToNs(iso: string, endOfDay = false): number {
 
 type HistoryRange = "1y" | "3y" | "5y" | "max";
 
+function cleanDataMessage(message: string) {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("plan doesn't include") ||
+    lower.includes("upgrade your plan") ||
+    lower.includes("data timeframe") ||
+    lower.includes("polygon.io/pricing") ||
+    lower.includes("subscription")
+  ) {
+    return "当前数据源不支持该时间范围的明细数据，已自动降级为可用数据。";
+  }
+  return message;
+}
+
 function historyStartISO(range: HistoryRange) {
   if (range === "max") return "2005-01-01";
   const years = range === "5y" ? 5 : range === "3y" ? 3 : 1;
@@ -87,9 +101,9 @@ export default function OptionQuoteHistory({
         // If only the underlying 1-min aggregates are missing (plan limits / off-hours),
         // keep the bid/ask chart visible and just log the warning.
         if (qs.length === 0 && r.messages?.length) {
-          setError(r.messages.join("；"));
+          setError(cleanDataMessage(r.messages.join("；")));
         } else if (r.messages?.length) {
-          console.warn("[OptionQuoteHistory] underlying minutes warning", r.messages);
+          console.warn("[OptionQuoteHistory] underlying minutes warning", r.messages.map(cleanDataMessage));
         }
       } else {
         const q = await getOptionQuotes(optionTicker, {
@@ -99,7 +113,7 @@ export default function OptionQuoteHistory({
         setQuotes(q); setSpotMin([]);
       }
     } catch (e: any) {
-      setError(e?.message ?? "加载失败"); setQuotes([]); setSpotMin([]);
+      setError(cleanDataMessage(e?.message ?? "加载失败")); setQuotes([]); setSpotMin([]);
     } finally { setLoading(false); }
   }
 
