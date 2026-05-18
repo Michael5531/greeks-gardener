@@ -368,7 +368,7 @@ Deno.serve(async (req) => {
           safeCachedPolygon(`hist-stock:${underlying}|${from}|${to}`, ttl, stockTarget),
         ]);
         let optionBars = optionR.data?.results ?? [];
-        const messages = [optionR.data?.message ?? optionR.data?.error, stockR.data?.message ?? stockR.data?.error].filter(Boolean);
+        const messages = publicMessages(optionR.data?.message ?? optionR.data?.error, stockR.data?.message ?? stockR.data?.error);
         let source = "aggs";
         if (optionBars.length < 30) {
           const quoteDaily = await optionQuoteDailyBars(option_ticker, from, to, apiKey, ttl);
@@ -424,7 +424,7 @@ Deno.serve(async (req) => {
           quotes: quoteR.data?.results ?? [],
           underlying_minutes: minuteR.data?.results ?? [],
           fallback: quoteR.status >= 400 || minuteR.status >= 400,
-          messages: [quoteR.data?.message ?? quoteR.data?.error, minuteR.data?.message ?? minuteR.data?.error].filter(Boolean),
+          messages: publicMessages(quoteR.data?.message ?? quoteR.data?.error, minuteR.data?.message ?? minuteR.data?.error),
         });
       }
       case "option-snapshot-single": {
@@ -456,8 +456,28 @@ function json(data: unknown, status = 200) {
   });
 }
 
+function publicProviderMessage(message: unknown) {
+  const text = typeof message === "string" ? message : "";
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("plan doesn't include") ||
+    lower.includes("upgrade your plan") ||
+    lower.includes("data timeframe") ||
+    lower.includes("not authorized") ||
+    lower.includes("subscription")
+  ) {
+    return "当前数据源不支持该时间范围的明细数据，已自动降级为可用数据。";
+  }
+  return text;
+}
+
+function publicMessages(...items: unknown[]) {
+  return Array.from(new Set(items.map(publicProviderMessage).filter(Boolean)));
+}
+
 function fallbackPayload(action: string, data: any, status: number) {
-  const message = data?.message ?? data?.error ?? `Upstream returned ${status}`;
+  const message = publicProviderMessage(data?.message ?? data?.error) ?? `数据源暂时不可用（${status}）`;
   if (action === "market-status") return { status: "OK", fallback: true, upstream_status: status, message };
   return { status: "OK", results: [], fallback: true, upstream_status: status, message };
 }
