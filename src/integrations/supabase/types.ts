@@ -181,6 +181,42 @@ export type Database = {
         }
         Relationships: []
       }
+      iv_history: {
+        Row: {
+          created_at: string
+          fly25: number | null
+          hv30: number | null
+          id: string
+          iv30: number | null
+          rr25: number | null
+          snapshot_date: string
+          spot: number | null
+          ticker: string
+        }
+        Insert: {
+          created_at?: string
+          fly25?: number | null
+          hv30?: number | null
+          id?: string
+          iv30?: number | null
+          rr25?: number | null
+          snapshot_date: string
+          spot?: number | null
+          ticker: string
+        }
+        Update: {
+          created_at?: string
+          fly25?: number | null
+          hv30?: number | null
+          id?: string
+          iv30?: number | null
+          rr25?: number | null
+          snapshot_date?: string
+          spot?: number | null
+          ticker?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
