@@ -129,6 +129,13 @@ function toLeg(c: any, side: "long" | "short"): Leg | null {
   };
 }
 
+function syntheticLeg(type: "call" | "put", side: "long" | "short", spot: number, strike: number, exp: string, dte: number, iv: number): Leg {
+  const T = Math.max(dte, 1) / 365;
+  const mid = Math.max(0.01, bsPrice(spot, strike, T, 0.045, iv, type));
+  const g = bsGreeks(spot, strike, T, 0.045, iv, type);
+  return { type, side, strike, expiration: exp, iv, mid, delta: g.delta, theta: g.theta };
+}
+
 function payoffAt(S: number, legs: Leg[]): number {
   // per-leg payoff at expiry per share, times 100 (one contract per leg)
   let sum = 0;
