@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import TickerSearch from "@/components/TickerSearch";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBuildTrade, BuiltStructure } from "@/hooks/useBuildTrade";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
-import { Loader2, Sparkles, ArrowDown, ArrowUp, Minus, Bookmark } from "lucide-react";
+import { Loader2, Sparkles, ArrowDown, ArrowUp, Minus, Bookmark, LineChart, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -52,7 +52,7 @@ function DirChip({ value, onChange }: { value: "long" | "short" | "neutral"; onC
   );
 }
 
-function StructureCard({ s, spot, best }: { s: BuiltStructure; spot: number; best: boolean }) {
+function StructureCard({ s, spot, best, onOpen }: { s: BuiltStructure; spot: number; best: boolean; onOpen: () => void }) {
   const netDebit = s.cost > 0;
   function save() {
     try {
@@ -65,9 +65,12 @@ function StructureCard({ s, spot, best }: { s: BuiltStructure; spot: number; bes
   }
   return (
     <div className={cn(
-      "border border-border p-5 space-y-4 hover:bg-secondary/30 transition-colors relative",
+      "group border border-border p-5 space-y-4 hover:bg-secondary/30 hover:border-primary/40 transition-colors relative cursor-pointer",
       best && "border-primary bg-primary/5",
-    )}>
+    )}
+      onClick={onOpen}
+      title="点击查看回测与详情"
+    >
       {best && (
         <span className="absolute top-0 right-0 bg-primary text-primary-foreground text-[9px] font-mono uppercase tracking-[0.2em] px-2 py-0.5">
           Top EV
@@ -78,13 +81,23 @@ function StructureCard({ s, spot, best }: { s: BuiltStructure; spot: number; bes
           <div className="editorial-eyebrow mb-1">{s.expiration}</div>
           <h3 className="font-serif-display text-2xl">{s.name}</h3>
         </div>
-        <button
-          onClick={save}
-          className="text-muted-foreground hover:text-primary transition-colors p-1"
-          title="Save draft"
-        >
-          <Bookmark className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); save(); }}
+            className="text-muted-foreground hover:text-primary transition-colors p-1"
+            title="Save draft"
+          >
+            <Bookmark className="h-4 w-4" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+            className="text-muted-foreground hover:text-primary transition-colors p-1"
+            title="回测此结构"
+          >
+            <LineChart className="h-4 w-4" />
+          </button>
+          <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground font-serif-display italic leading-snug">{s.rationale}</p>
