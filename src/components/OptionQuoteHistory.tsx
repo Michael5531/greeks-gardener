@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import {
   AreaChart, Area, LineChart, Line, ComposedChart, Bar,
-  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine,
+  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, Brush,
 } from "recharts";
 import ChartSizer from "@/components/charts/ChartSizer";
 import { getOptionQuotes, callPolygon } from "@/lib/polygon";
