@@ -17,6 +17,7 @@ import Backtest from "./pages/app/Backtest.tsx";
 import Signals from "./pages/app/Signals.tsx";
 import Orderbook from "./pages/app/Orderbook.tsx";
 import Flow from "./pages/app/Flow.tsx";
+import OrderbookHistory from "./pages/app/OrderbookHistory.tsx";
 import IVLab from "./pages/app/IVLab.tsx";
 import IdeaLab from "./pages/app/IdeaLab.tsx";
 import TradeBuilder from "./pages/app/TradeBuilder.tsx";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="gex" element={<GEX />} />
               <Route path="orderbook" element={<Orderbook />} />
               <Route path="flow" element={<Flow />} />
+              <Route path="orderbook-history" element={<OrderbookHistory />} />
               <Route path="iv-lab" element={<IVLab />} />
               <Route path="backtest" element={<Backtest />} />
               <Route path="signals" element={<Signals />} />

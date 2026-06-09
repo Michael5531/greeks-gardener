@@ -38,6 +38,7 @@ export default function AppLayout() {
         { to: "/app/chain", label: t.nav.chain, icon: Boxes },
         { to: "/app/orderbook", label: t.nav.orderbook, icon: Layers },
         { to: "/app/flow", label: t.nav.flow, icon: History },
+        { to: "/app/orderbook-history", label: t.nav.orderbookHistory, icon: Layers },
       ],
     },
     {
