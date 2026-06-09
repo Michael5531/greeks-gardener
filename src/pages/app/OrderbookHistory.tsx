@@ -148,7 +148,7 @@ export default function OrderbookHistory() {
         <div className="rounded-lg border border-border bg-card/40 p-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground font-mono">日期</span>
-            <DatePicker value={date} onChange={(v) => v && setDate(v)} max={todayISO()} />
+            <DatePicker value={date} onChange={(v) => v && setDate(v)} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground font-mono">到期</span>
