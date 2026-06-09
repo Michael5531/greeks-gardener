@@ -5,7 +5,6 @@ const corsHeaders = {
 };
 
 const POLYGON_BASE = "https://api.polygon.io";
-let polygonChain: Promise<any> = Promise.resolve();
 let polygonLastAt = 0;
 const POLYGON_MIN_INTERVAL_MS = 350;
 
@@ -48,8 +47,7 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function polygonFetchJson(target: string, tries = 3): Promise<{ data: any; status: number }> {
-  const run = async () => {
+async function polygonFetchJson(target: string, tries = 2): Promise<{ data: any; status: number }> {
     let last: any = null;
     const since = Date.now() - polygonLastAt;
     if (since < POLYGON_MIN_INTERVAL_MS) await wait(POLYGON_MIN_INTERVAL_MS - since);
@@ -62,13 +60,10 @@ async function polygonFetchJson(target: string, tries = 3): Promise<{ data: any;
         const softRateLimit = dd?.status === "ERROR" && `${dd?.error ?? dd?.message ?? ""}`.toLowerCase().includes("maximum requests per minute");
         if (rr.status === 429 || softRateLimit || (rr.status >= 500 && rr.status < 600)) {
           last = dd;
-          // Keep waits short — the function has a CPU/wall budget and long
-          // serialized retries cause WORKER_RESOURCE_LIMIT errors. Let the
-          // client retry instead of holding the worker.
           if (i === tries - 1) {
             return { data: dd, status: rr.status };
           }
-          const waitMs = Math.min(2_500, 700 * Math.pow(2, i)) + Math.floor(Math.random() * 200);
+          const waitMs = Math.min(1_200, 500 * (i + 1)) + Math.floor(Math.random() * 150);
           console.warn(`[polygon-proxy] retry ${i + 1}/${tries} status=${rr.status} wait=${waitMs}ms`);
           await wait(waitMs);
           continue;
@@ -76,14 +71,11 @@ async function polygonFetchJson(target: string, tries = 3): Promise<{ data: any;
         return { data: dd, status: rr.status };
       } catch (e) {
         last = e;
-        await wait(Math.min(8_000, 800 * (i + 1)));
+        if (i === tries - 1) break;
+        await wait(Math.min(1_500, 600 * (i + 1)));
       }
     }
     throw new Error(last?.error ?? last?.message ?? "Polygon request failed after retries");
-  };
-  const p = polygonChain.then(run, run);
-  polygonChain = p.catch(() => {});
-  return p;
 }
 
 async function safeCachedPolygon(key: string, ttl: number, target: string) {
