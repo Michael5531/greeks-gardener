@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import {
   AreaChart, Area, LineChart, Line, ComposedChart, Bar,
-  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine,
+  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, Brush,
 } from "recharts";
 import ChartSizer from "@/components/charts/ChartSizer";
 import { getOptionQuotes, callPolygon } from "@/lib/polygon";
@@ -375,6 +375,8 @@ export default function OptionQuoteHistory({
                     <Area type="monotone" dataKey="ask" stroke="hsl(var(--bear))" fill="url(#askFill)" dot={false} isAnimationActive={false} />
                     <Area type="monotone" dataKey="bid" stroke="hsl(var(--bull))" fill="url(#bidFill)" dot={false} isAnimationActive={false} />
                     <Area type="monotone" dataKey="mid" stroke="hsl(var(--primary))" fill="none" dot={false} isAnimationActive={false} />
+                    <Brush dataKey="t" height={18} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                      tickFormatter={(t) => new Date(t as number).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} />
                   </AreaChart>
                 )}</ChartSizer>
               )}
@@ -463,6 +465,8 @@ export default function OptionQuoteHistory({
                           return typeof v === "number" ? v.toFixed(3) : v;
                         }} />
                       <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                      <Brush dataKey="t" height={20} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                        tickFormatter={(t) => new Date(t as number).toISOString().slice(5, 10)} />
                     </ComposedChart>
                   )}</ChartSizer>
                 </>
@@ -491,6 +495,8 @@ export default function OptionQuoteHistory({
                     {strike != null && <ReferenceLine y={strike} stroke="hsl(var(--primary))" strokeDasharray="4 4"
                       label={{ value: `K=${strike}`, fill: "hsl(var(--primary))", fontSize: 10, position: "insideTopRight" }} />}
                     <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                    <Brush dataKey="t" height={20} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                      tickFormatter={(t) => new Date(t as number).toISOString().slice(5, 10)} />
                   </ComposedChart>
                 )}</ChartSizer>
               )}
@@ -513,6 +519,8 @@ export default function OptionQuoteHistory({
                       labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
                       formatter={(v: any) => v == null ? "—" : `${(v as number).toFixed(2)}%`} />
                     <Line type="monotone" dataKey="iv" stroke="hsl(var(--primary))" dot={false} isAnimationActive={false} connectNulls />
+                    <Brush dataKey="t" height={18} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                      tickFormatter={(t) => new Date(t as number).toISOString().slice(5, 10)} />
                   </LineChart>
                 )}</ChartSizer>
               )}
@@ -550,24 +558,23 @@ function Candle(props: any) {
   const { x, y, width, height, payload } = props;
   if (!payload || typeof payload.o !== "number") return null;
   const { o, h, l, c } = payload;
-  if (h === l) {
-    const cx = x + width / 2;
-    return <line x1={cx - width * 0.35} x2={cx + width * 0.35} y1={y} y2={y}
-      stroke="hsl(var(--muted-foreground))" strokeWidth={1} />;
-  }
   const isBull = c >= o;
   const color = isBull ? "hsl(var(--bull))" : "hsl(var(--bear))";
+  const cx = x + width / 2;
+  const bodyW = Math.max(2, Math.min(10, width * 0.7));
+  if (h === l) {
+    return <line x1={cx - bodyW / 2} x2={cx + bodyW / 2} y1={y} y2={y}
+      stroke={color} strokeWidth={1.5} />;
+  }
   const top = Math.max(o, c);
   const bot = Math.min(o, c);
   const bodyTop = y + ((h - top) / (h - l)) * height;
   const bodyBot = y + ((h - bot) / (h - l)) * height;
-  const bodyH = Math.max(1, bodyBot - bodyTop);
-  const cx = x + width / 2;
-  const bodyW = Math.max(2, Math.min(10, width * 0.7));
+  const bodyH = Math.max(1.5, bodyBot - bodyTop);
   return (
     <g>
-      <line x1={cx} x2={cx} y1={y} y2={y + height} stroke={color} strokeWidth={1} />
-      <rect x={cx - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} />
+      <line x1={cx} x2={cx} y1={y} y2={y + height} stroke={color} strokeWidth={1.25} strokeOpacity={0.95} />
+      <rect x={cx - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} stroke={color} strokeWidth={0.75} />
     </g>
   );
 }
