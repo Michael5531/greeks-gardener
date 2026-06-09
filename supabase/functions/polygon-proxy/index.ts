@@ -122,7 +122,7 @@ function yahooBarsFromChart(res0: any) {
   })).filter((b: any) => b.c != null);
 }
 
-async function optionQuoteDailyBars(optionTicker: string, from: string, to: string, apiKey: string, ttl: number, maxPages = 24) {
+async function optionQuoteDailyBars(optionTicker: string, from: string, to: string, apiKey: string, ttl: number, maxPages = 8) {
   const byDay = new Map<string, any>();
   let next = `${POLYGON_BASE}/v3/quotes/${encodeURIComponent(optionTicker)}?timestamp.gte=${isoToNs(from)}&timestamp.lte=${isoToNs(to, true)}&order=asc&limit=50000&sort=timestamp`;
   let pages = 0;
@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
           let next = `${POLYGON_BASE}/v3/snapshot/options/${encodeURIComponent(body.ticker)}?limit=250${expQ}&apiKey=${apiKey}`;
           const all: any[] = [];
           let pages = 0;
-          const maxPages = body.expiration_date ? 6 : 20;
+            const maxPages = body.expiration_date ? 6 : 10;
           while (next && pages < maxPages) {
             const { data: dd } = await polygonFetchJson(next);
             if (Array.isArray(dd.results)) all.push(...dd.results);
@@ -300,7 +300,7 @@ Deno.serve(async (req) => {
           const seen = new Set<string>();
           let next = `${POLYGON_BASE}/v3/reference/options/contracts?underlying_ticker=${encodeURIComponent(body.ticker)}&limit=1000&expired=false&apiKey=${apiKey}`;
           let pages = 0;
-          while (next && pages < 10) {
+          while (next && pages < 6) {
             const { data: dd } = await polygonFetchJson(next);
             for (const c of dd.results ?? []) {
               if (c.expiration_date) seen.add(c.expiration_date);
