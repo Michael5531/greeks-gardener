@@ -183,6 +183,7 @@ function StructureCard({ s, spot, best, onOpen }: { s: BuiltStructure; spot: num
 
 export default function TradeBuilder() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const [ticker, setTicker] = useState(params.get("ticker") ?? "");
   const [direction, setDirection] = useState<"long" | "short" | "neutral">(
     (params.get("direction") as any) ?? "long");
@@ -325,7 +326,17 @@ export default function TradeBuilder() {
       {result && (
         <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {result.structures.map(s => (
-            <StructureCard key={s.name} s={s} spot={result.spot} best={s === topEv} />
+            <StructureCard
+              key={s.name}
+              s={s}
+              spot={result.spot}
+              best={s === topEv}
+              onOpen={() => {
+                try { localStorage.setItem("optix.lastStructure", JSON.stringify({ ...s, ticker: result.ticker, spot: result.spot, target: result.target })); } catch {}
+                const qs = new URLSearchParams({ ticker: result.ticker, structure: s.name, expiration: s.expiration });
+                navigate(`/app/backtest?${qs.toString()}`);
+              }}
+            />
           ))}
         </section>
       )}
