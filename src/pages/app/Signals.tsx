@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fmt, fmtPct } from "@/lib/optionUtils";
-import { Radar } from "lucide-react";
+import { Radar, Sparkles, LineChart, ChevronRight } from "lucide-react";
 import { useT } from "@/i18n";
 
 /* Multi-strategy scanner. For each watchlist ticker we evaluate a set of rule-based
@@ -19,8 +20,20 @@ const STRATEGY_LABELS: Record<string, string> = {
   iron_condor: "Iron Condor",
 };
 
+function directionOf(strategy: string): "long" | "short" | "neutral" {
+  if (["long_call", "bull_call_spread", "covered_call", "cash_secured_put"].includes(strategy)) return "long";
+  if (["long_put", "bear_put_spread"].includes(strategy)) return "short";
+  return "neutral";
+}
+function daysUntil(date?: string): number {
+  if (!date) return 14;
+  const ms = Date.parse(date + "T00:00:00Z") - Date.now();
+  return Math.max(1, Math.round(ms / 86_400_000));
+}
+
 export default function Signals() {
   const t = useT();
+  const navigate = useNavigate();
   const [items, setItems] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [filter, setFilter] = useState<string>("all");
@@ -49,12 +62,34 @@ export default function Signals() {
   const strategies = useMemo(() => Array.from(new Set(items.map(i => i.strategy_type))), [items]);
   const filtered = filter === "all" ? items : items.filter(i => i.strategy_type === filter);
 
+  function goAnalyze(s: any) {
+    const dir = directionOf(s.strategy_type);
+    const strike = Number(s.signal?.strike);
+    const spot = Number(s.signal?.spot ?? strike);
+    const target = dir === "neutral"
+      ? spot
+      : dir === "long"
+        ? Math.max(strike, spot) * 1.05
+        : Math.min(strike, spot) * 0.95;
+    const days = daysUntil(s.signal?.expiration);
+    const qs = new URLSearchParams({
+      ticker: s.ticker,
+      direction: dir,
+      target: target.toFixed(2),
+      days: String(days),
+    });
+    navigate(`/app/trade-builder?${qs.toString()}`);
+  }
+  function goBacktest(s: any) {
+    navigate(`/app/backtest?ticker=${encodeURIComponent(s.ticker)}`);
+  }
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t.signalsExt.title}</h1>
-          <p className="text-sm text-muted-foreground">{t.signalsExt.sub}</p>
+          <p className="text-sm text-muted-foreground">{t.signalsExt.sub} · 点击任意一行查看未来分析与回测</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={filter} onChange={e => setFilter(e.target.value)} className="h-9 text-xs bg-background border border-border rounded px-2">
@@ -80,12 +115,18 @@ export default function Signals() {
               <th className="text-right">Vol</th>
               <th className="text-right">OI</th>
               <th className="text-right">Bid/Ask</th>
+              <th className="text-right px-3">动作</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">暂无信号，点击"立即扫描"</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">暂无信号，点击"立即扫描"</td></tr>}
             {filtered.map(s => (
-              <tr key={s.id} className="border-t border-border/50 hover:bg-secondary/30">
+              <tr
+                key={s.id}
+                className="border-t border-border/50 hover:bg-secondary/40 cursor-pointer group"
+                onClick={() => goAnalyze(s)}
+                title="点击查看分析与回测"
+              >
                 <td className="px-3 py-1.5">{s.created_at?.slice(0,16).replace("T"," ")}</td>
                 <td className="font-bold">{s.ticker}</td>
                 <td>
@@ -103,6 +144,25 @@ export default function Signals() {
                 <td className="text-right">{s.signal?.volume != null ? Number(s.signal.volume).toLocaleString() : "—"}</td>
                 <td className="text-right">{s.signal?.oi != null ? Number(s.signal.oi).toLocaleString() : "—"}</td>
                 <td className="text-right">{fmt(s.signal?.bid)}/{fmt(s.signal?.ask)}</td>
+                <td className="text-right px-3 py-1.5">
+                  <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => goAnalyze(s)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border hover:border-primary hover:text-primary transition-colors text-[10px]"
+                      title="去 Trade Builder 看未来 EV / POP / 退出计划"
+                    >
+                      <Sparkles className="h-3 w-3" />分析
+                    </button>
+                    <button
+                      onClick={() => goBacktest(s)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border hover:border-primary hover:text-primary transition-colors text-[10px]"
+                      title="跳转到回测页面"
+                    >
+                      <LineChart className="h-3 w-3" />回测
+                    </button>
+                    <ChevronRight className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
