@@ -375,6 +375,8 @@ export default function OptionQuoteHistory({
                     <Area type="monotone" dataKey="ask" stroke="hsl(var(--bear))" fill="url(#askFill)" dot={false} isAnimationActive={false} />
                     <Area type="monotone" dataKey="bid" stroke="hsl(var(--bull))" fill="url(#bidFill)" dot={false} isAnimationActive={false} />
                     <Area type="monotone" dataKey="mid" stroke="hsl(var(--primary))" fill="none" dot={false} isAnimationActive={false} />
+                    <Brush dataKey="t" height={18} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                      tickFormatter={(t) => new Date(t as number).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} />
                   </AreaChart>
                 )}</ChartSizer>
               )}
@@ -463,6 +465,8 @@ export default function OptionQuoteHistory({
                           return typeof v === "number" ? v.toFixed(3) : v;
                         }} />
                       <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                      <Brush dataKey="t" height={20} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                        tickFormatter={(t) => new Date(t as number).toISOString().slice(5, 10)} />
                     </ComposedChart>
                   )}</ChartSizer>
                 </>
@@ -491,6 +495,8 @@ export default function OptionQuoteHistory({
                     {strike != null && <ReferenceLine y={strike} stroke="hsl(var(--primary))" strokeDasharray="4 4"
                       label={{ value: `K=${strike}`, fill: "hsl(var(--primary))", fontSize: 10, position: "insideTopRight" }} />}
                     <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                    <Brush dataKey="t" height={20} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                      tickFormatter={(t) => new Date(t as number).toISOString().slice(5, 10)} />
                   </ComposedChart>
                 )}</ChartSizer>
               )}
@@ -513,6 +519,8 @@ export default function OptionQuoteHistory({
                       labelFormatter={(t) => new Date(t as number).toISOString().slice(0, 10)}
                       formatter={(v: any) => v == null ? "—" : `${(v as number).toFixed(2)}%`} />
                     <Line type="monotone" dataKey="iv" stroke="hsl(var(--primary))" dot={false} isAnimationActive={false} connectNulls />
+                    <Brush dataKey="t" height={18} travellerWidth={8} stroke="hsl(var(--primary))" fill="hsl(var(--card))"
+                      tickFormatter={(t) => new Date(t as number).toISOString().slice(5, 10)} />
                   </LineChart>
                 )}</ChartSizer>
               )}
